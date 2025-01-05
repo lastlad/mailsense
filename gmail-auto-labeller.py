@@ -35,8 +35,8 @@ def get_gmail_service():
 
     return build('gmail', 'v1', credentials=creds)
 
-def get_unread_subjects():
-    """Fetches subjects of unread emails."""
+def get_unread_emails_info():
+    """Fetches details of the unread emails."""
     service = get_gmail_service()
     
     # Get unread messages
@@ -48,32 +48,40 @@ def get_unread_subjects():
     ).execute()
     
     messages = results.get('messages', [])
-    subjects = []
+    email_info = []
 
     if not messages:
         print('No unread messages found.')
-        return subjects
+        return email_info
 
     for message in messages:
         msg = service.users().messages().get(
             userId='me',
             id=message['id']
         ).execute()
-        
+
         # Extract subject from headers
         headers = msg['payload']['headers']
         subject = ''
+        sender = ''
         for header in headers:
             if header['name'] == 'Subject':
                 subject = header['value']
+            elif header['name'] == 'From':
+                sender = header['value']
+            if subject and sender:
                 break
 
         # date_str = datetime.fromtimestamp(int(msg['internalDate'])/1000).strftime('%Y-%m-%d %H:%M:%S')
         # subject = f"Date: {date_str} --- Subject: {subject} --- Labels: {msg['labelIds']}"
         
-        subjects.append(subject)
+        email_info.append({
+            'sender': sender,
+            'subject': subject,
+            'snippet': msg['snippet']
+        })
     
-    return subjects
+    return email_info
 
 def list_all_labels():
     """Fetches and prints all labels in the user's Gmail account."""
@@ -87,9 +95,9 @@ def list_all_labels():
             print('No labels found.')
             return []
 
-        print('Labels:')
-        for label in labels:
-            print(f"Name: {label['name']:<30} ID: {label['id']}, Type: {label['type']}")
+        # print('Labels:')
+        # for label in labels:
+        #     print(f"Name: {label['name']:<30} ID: {label['id']}, Type: {label['type']}")
         
         return [label for label in labels if label['type'] == 'user']
 
@@ -97,12 +105,12 @@ def list_all_labels():
         print(f'An error occurred: {e}')
         return []
 
-def classify_email(subjects, available_labels):
+def classify_email(email_info, available_labels):
     """
     Uses LangChain and an LLM to classify emails based on their subjects and available labels.
     
     Args:
-        subjects: List of email subject strings
+        email_info: List of email details like Subject, Received From, Email Snippet etc.,
         available_labels: List of Gmail label dictionaries
     
     Returns:
@@ -124,8 +132,14 @@ def classify_email(subjects, available_labels):
     Available Labels:
     {labels}
 
-    Email Information:
-    {email_info}
+    Email Received From:
+    {email_from}
+
+    Email Subject:
+    {email_subject}
+
+    Email Content:
+    {email_content}
 
     Please respond with only the label name for this email. If no label fits, respond with "NONE".
     Choose only from the exact labels provided above."""
@@ -134,11 +148,13 @@ def classify_email(subjects, available_labels):
     
     classifications = []
     
-    for subject in subjects:
+    for email in email_info:
         # Create the messages for this specific email
         messages = prompt.format_messages(
             labels="\n".join(label_names),
-            email_info=subject
+            email_from=email['sender'],
+            email_subject=email['subject'],
+            email_content=email['snippet']
         )
         
         # Get the classification from the LLM
@@ -146,7 +162,7 @@ def classify_email(subjects, available_labels):
         suggested_label = response.content.strip()
         
         # Add to our results
-        classifications.append((subject, suggested_label))
+        classifications.append((email['subject'], suggested_label))
         
     return classifications
 
@@ -155,11 +171,11 @@ if __name__ == '__main__':
     all_labels = list_all_labels()
     
     # Get unread email subjects
-    subjects = get_unread_subjects()
+    email_info = get_unread_emails_info()
     
     # Classify the emails
     print("\nClassifying emails...")
-    classifications = classify_email(subjects, all_labels)
+    classifications = classify_email(email_info, all_labels)
     
     # Print results
     print("\nClassification Results:")
