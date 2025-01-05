@@ -3,6 +3,13 @@ from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
+from datetime import datetime
+from langchain_openai import ChatOpenAI
+from langchain.prompts import ChatPromptTemplate
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
 
 # If modifying these scopes, delete the file token.json.
 SCOPES = ['https://www.googleapis.com/auth/gmail.readonly']
@@ -37,7 +44,7 @@ def get_unread_subjects():
         userId='me',
         labelIds=['UNREAD', 'CATEGORY_UPDATES'],
         q='is:unread',
-        maxResults=10
+        maxResults=50
     ).execute()
     
     messages = results.get('messages', [])
@@ -61,7 +68,8 @@ def get_unread_subjects():
                 subject = header['value']
                 break
 
-        subject = f"{subject} --- Labels: {msg['labelIds']}"
+        # date_str = datetime.fromtimestamp(int(msg['internalDate'])/1000).strftime('%Y-%m-%d %H:%M:%S')
+        # subject = f"Date: {date_str} --- Subject: {subject} --- Labels: {msg['labelIds']}"
         
         subjects.append(subject)
     
@@ -81,18 +89,80 @@ def list_all_labels():
 
         print('Labels:')
         for label in labels:
-            print(f"Name: {label['name']:<30} ID: {label['id']}")
+            print(f"Name: {label['name']:<30} ID: {label['id']}, Type: {label['type']}")
         
-        return labels
+        return [label for label in labels if label['type'] == 'user']
 
     except Exception as e:
         print(f'An error occurred: {e}')
         return []
 
-if __name__ == '__main__':
-    list_all_labels()
+def classify_email(subjects, available_labels):
+    """
+    Uses LangChain and an LLM to classify emails based on their subjects and available labels.
+    
+    Args:
+        subjects: List of email subject strings
+        available_labels: List of Gmail label dictionaries
+    
+    Returns:
+        List of tuples containing (subject, recommended_label)
+    """
+    # Extract just the label names from the label objects
+    label_names = [label['name'] for label in available_labels]
+    
+    # Initialize the LLM
+    llm = ChatOpenAI(
+        temperature=0,  # We want consistent results for classification
+        model="gpt-4o-mini"  # You can change this to gpt-4 if needed
+    )
+    
+    # Create the prompt template
+    template = """You are an email classifier. Given the following email information and available Gmail labels, 
+    suggest the most appropriate label for each email. Only suggest labels from the provided list.
 
-    subjects = get_unread_subjects()
-    print("\nUnread email subjects:")
+    Available Labels:
+    {labels}
+
+    Email Information:
+    {email_info}
+
+    Please respond with only the label name for this email. If no label fits, respond with "NONE".
+    Choose only from the exact labels provided above."""
+
+    prompt = ChatPromptTemplate.from_template(template)
+    
+    classifications = []
+    
     for subject in subjects:
-        print(f"- {subject}")
+        # Create the messages for this specific email
+        messages = prompt.format_messages(
+            labels="\n".join(label_names),
+            email_info=subject
+        )
+        
+        # Get the classification from the LLM
+        response = llm.invoke(messages)
+        suggested_label = response.content.strip()
+        
+        # Add to our results
+        classifications.append((subject, suggested_label))
+        
+    return classifications
+
+if __name__ == '__main__':
+    # Get all labels first
+    all_labels = list_all_labels()
+    
+    # Get unread email subjects
+    subjects = get_unread_subjects()
+    
+    # Classify the emails
+    print("\nClassifying emails...")
+    classifications = classify_email(subjects, all_labels)
+    
+    # Print results
+    print("\nClassification Results:")
+    for subject, label in classifications:
+        print(f"\nEmail: {subject}")
+        print(f"Suggested Label: {label}")
