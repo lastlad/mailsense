@@ -127,7 +127,7 @@ def classify_email(email_info, available_labels):
     
     # Create the prompt template
     template = """You are an email classifier. Given the following email information and available Gmail labels, 
-    suggest the most appropriate label for each email. Only suggest labels from the provided list.
+    suggest the most appropriate label for each email based on the given email subject, email content and the sender of the email. Only suggest labels from the provided list.
 
     Available Labels:
     {labels}
@@ -177,8 +177,18 @@ if __name__ == '__main__':
     print("\nClassifying emails...")
     classifications = classify_email(email_info, all_labels)
     
-    # Print results
-    print("\nClassification Results:")
-    for subject, label in classifications:
-        print(f"\nEmail: {subject}")
-        print(f"Suggested Label: {label}")
+    # Create outputs directory if it doesn't exist
+    os.makedirs('outputs', exist_ok=True)
+    
+    # Generate filename with timestamp
+    timestamp = datetime.now().strftime('%Y%m%d%H%M')
+    output_file = f'outputs/output-{timestamp}.txt'
+    
+    # Write results to file
+    with open(output_file, 'w', encoding='utf-8') as f:
+        f.write("Classification Results:\n")
+        for subject, label in classifications:
+            f.write(f"\nEmail: {subject}\n")
+            f.write(f"Suggested Label: {label}\n")
+    
+    print(f"\nResults have been written to: {output_file}")
