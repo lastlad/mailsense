@@ -8,6 +8,7 @@ from langchain_openai import ChatOpenAI
 from langchain.prompts import ChatPromptTemplate
 from dotenv import load_dotenv
 import os
+import argparse
 
 load_dotenv()
 
@@ -35,7 +36,7 @@ def get_gmail_service():
 
     return build('gmail', 'v1', credentials=creds)
 
-def get_unread_emails_info():
+def get_unread_emails_info(args):
     """Fetches details of the unread emails."""
     service = get_gmail_service()
     
@@ -44,7 +45,7 @@ def get_unread_emails_info():
         userId='me',
         labelIds=['UNREAD', 'CATEGORY_UPDATES'],
         q='is:unread',
-        maxResults=50
+        maxResults=args.max_results
     ).execute()
     
     messages = results.get('messages', [])
@@ -99,6 +100,7 @@ def list_all_labels():
         # for label in labels:
         #     print(f"Name: {label['name']:<30} ID: {label['id']}, Type: {label['type']}")
         
+        # Return only user defined labels are we don't want to categorize them into gmail predefined labels.
         return [label for label in labels if label['type'] == 'user']
 
     except Exception as e:
@@ -167,11 +169,67 @@ def classify_email(email_info, available_labels):
     return classifications
 
 if __name__ == '__main__':
+    # Set up argument parser
+    parser = argparse.ArgumentParser(description='Gmail Auto Labeller')
+    parser.add_argument(
+        '--llm', 
+        default='gpt-4o-mini',
+        required=False,
+        choices=['gpt-35','gpt-4o-mini','gpt-4o','claude-sonnet-35','claude-haiku-35'],
+        help='LLM provider to use.'
+    )
+    parser.add_argument(
+        '--llm-api-keys',
+        type=str,
+        required=False,
+        help='API Keys for the LLM provider of choice. Loads from .env if not provided.'
+    )
+    # parser.add_argument(
+    #     '--only-unread', 
+    #     type=bool, 
+    #     default=True,
+    #     help='Label on the unread emails. *** Be cautious as labelling all emails will be expensive.'
+    # )
+    parser.add_argument(
+        '--use-user-labels',
+        type=bool,
+        default=True,
+        help='Use existing user defined labels to classify the email. If none of the lables match, its marked as NONE.'
+    )
+    parser.add_argument(
+        '--create-labels', 
+        type=bool, 
+        default=False,
+        help='Create new labels on the fly using LLM. If not, will look for a correct fit from the available labels.'
+    )
+    parser.add_argument(
+        '--dry-run', 
+        type=bool, 
+        default=True,
+        help='Dry run. Will not update the labels of the emails.'
+    )
+    parser.add_argument(
+        '--max-emails', 
+        type=int, 
+        default=25,
+        required=False,
+        help='Maximum number of unread emails to process (default: 25)'
+    )
+    parser.add_argument(
+        '--print', 
+        action='store_true',
+        help='Print results to console in addition to saving to file'
+    )
+    args = parser.parse_args()
+
     # Get all labels first
+    # all_labels = []
+    # if args.use_user_labels:
+    #     all_labels = list_all_labels()
     all_labels = list_all_labels()
     
-    # Get unread email subjects
-    email_info = get_unread_emails_info()
+    # Get unread email info with max_results parameter
+    email_info = get_unread_emails_info(args)
     
     # Classify the emails
     print("\nClassifying emails...")
@@ -190,5 +248,9 @@ if __name__ == '__main__':
         for subject, label in classifications:
             f.write(f"\nEmail: {subject}\n")
             f.write(f"Suggested Label: {label}\n")
+            # Print to console if --print flag is used
+            if args.print:
+                print(f"\nEmail: {subject}")
+                print(f"Suggested Label: {label}")
     
     print(f"\nResults have been written to: {output_file}")
