@@ -43,9 +43,9 @@ def get_unread_emails_info(args):
     # Get unread messages
     results = service.users().messages().list(
         userId='me',
-        labelIds=['UNREAD', 'CATEGORY_UPDATES'],
+        labelIds=['UNREAD', 'CATEGORY_UPDATES'], #'CATEGORY_PERSONAL'
         q='is:unread',
-        maxResults=args.max_results
+        maxResults=args.max_emails
     ).execute()
     
     messages = results.get('messages', [])
@@ -58,7 +58,8 @@ def get_unread_emails_info(args):
     for message in messages:
         msg = service.users().messages().get(
             userId='me',
-            id=message['id']
+            id=message['id'],
+            #format='full'
         ).execute()
 
         # Extract subject from headers
@@ -75,14 +76,35 @@ def get_unread_emails_info(args):
 
         # date_str = datetime.fromtimestamp(int(msg['internalDate'])/1000).strftime('%Y-%m-%d %H:%M:%S')
         # subject = f"Date: {date_str} --- Subject: {subject} --- Labels: {msg['labelIds']}"
+
+        # message_content = get_message_content(msg['payload'])
+        # print(f"{message_content[:200]}..." if len(message_content) > 200 else message_content)
+        # print(message_content)
+        # print('----------EOM--------------')
         
         email_info.append({
             'sender': sender,
             'subject': subject,
-            'snippet': msg['snippet']
+            'snippet': msg['snippet'],
+            #'content': message_content
         })
     
     return email_info
+
+def get_message_content(payload):
+    if 'parts' in payload:
+        # Multipart message
+        content = []
+        for part in payload['parts']:
+            content.append(get_message_content(part))
+        return ' '.join(content)
+    elif 'body' in payload and 'data' in payload['body']:
+        # Base64 encoded content
+        from base64 import urlsafe_b64decode
+        data = payload['body']['data']
+        text = urlsafe_b64decode(data).decode('utf-8')
+        return text
+    return ''
 
 def list_all_labels():
     """Fetches and prints all labels in the user's Gmail account."""
@@ -129,7 +151,7 @@ def classify_email(email_info, available_labels):
     
     # Create the prompt template
     template = """You are an email classifier. Given the following email information and available Gmail labels, 
-    suggest the most appropriate label for each email based on the given email subject, email content and the sender of the email. Only suggest labels from the provided list.
+    suggest the most appropriate label for each email based on the given email subject, email content and the sender of the email. Only suggest labels from the provided list.    
 
     Available Labels:
     {labels}
@@ -143,21 +165,59 @@ def classify_email(email_info, available_labels):
     Email Content:
     {email_content}
 
+    Carefully read through the content of the email to understand the context of the email. Do not match to a label just because you see a related label. Let me explain with few examples:
+
+    Example - 1:
+    You may get see an email coming from discover.com domain. But the content may not be anything important or urgent and can be a promotional email. In this case the label should be `00 - Financials` and not `00 - Financials/Discover`
+
+    Example - 2:
+    The email is received from linkedin.com domain. However content may not be anything important but rather just some updates from my linkedin connections. In this case the label should not not `99 - Misc/Jobs` but `99 - Misc`
+
     Please respond with only the label name for this email. If no label fits, respond with "NONE".
     Choose only from the exact labels provided above."""
 
+    template_without_labels = """You are an email classifier. Given the following email information, suggest the most appropriate label for each email based on the given email subject, email content and the sender of the email.
+
+    Email Received From:
+    {email_from}
+
+    Email Subject:
+    {email_subject}
+
+    Email Content:
+    {email_content}
+
+    Carefully read through the content of the email to understand the context of the email. Do not match to a label just because you see a related label. Let me explain with few examples:
+
+    Example - 1:
+    You may get see an email coming from discover.com domain. But the content may not be anything important or urgent and can be a promotional email. In this case the label should be `Financials/Promotions` and not `Financials/Discover`.
+
+    Example - 2:
+    The email is received from linkedin.com domain. However content may not be anything important but rather just some updates from my linkedin connections. In this case the label should be `Misc/Updates` and not `Misc/Jobs`.
+
+    Please respond with only the label name for this email."""
+
     prompt = ChatPromptTemplate.from_template(template)
+    prompt_without_labels = ChatPromptTemplate.from_template(template_without_labels)
     
     classifications = []
     
     for email in email_info:
         # Create the messages for this specific email
-        messages = prompt.format_messages(
-            labels="\n".join(label_names),
-            email_from=email['sender'],
-            email_subject=email['subject'],
-            email_content=email['snippet']
-        )
+        
+        if len(label_names) > 0:
+            messages = prompt.format_messages(
+                labels="\n".join(label_names),
+                email_from=email['sender'],
+                email_subject=email['subject'],
+                email_content=email['snippet'] #email['content']
+            )
+        else:
+            messages = prompt_without_labels.format_messages(
+                email_from=email['sender'],
+                email_subject=email['subject'],
+                email_content=email['snippet'] #email['content']
+            )            
         
         # Get the classification from the LLM
         response = llm.invoke(messages)
@@ -192,8 +252,7 @@ if __name__ == '__main__':
     # )
     parser.add_argument(
         '--use-user-labels',
-        type=bool,
-        default=True,
+        action='store_true',
         help='Use existing user defined labels to classify the email. If none of the lables match, its marked as NONE.'
     )
     parser.add_argument(
@@ -223,10 +282,10 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     # Get all labels first
-    # all_labels = []
-    # if args.use_user_labels:
-    #     all_labels = list_all_labels()
-    all_labels = list_all_labels()
+    all_labels = []
+    if args.use_user_labels:
+        all_labels = list_all_labels()
+    # all_labels = list_all_labels()
     
     # Get unread email info with max_results parameter
     email_info = get_unread_emails_info(args)
