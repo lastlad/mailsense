@@ -13,9 +13,14 @@ Features:
 - Label the emails identified as promotion or useless emails as Trash
     - Auto delete the emails identified as promotion or trash.
 
+New Ideas:
+- Ability to identify all the emails that have sensitive content (SSN, Passport, CCNumbers etc.,)
+
 Code Enhancements:
 ------------------
 - Add Commandline Args
 - Add support for other LLMs
 - Improvise google authentication for external facing app
 - Dockerize / Run as Serverless service / Chrome Extension
+- Handle PII/Sensitive data parsing and skipping it to send to LLM
+- Support for other email providers

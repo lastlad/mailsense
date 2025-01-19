@@ -1,6 +1,18 @@
+# macOS system files
+.DS_Store
+**/.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+
+# Virtual environments and secrets
 .venv
 .env
 token.json
 credentials.json
+
+# Project specific files
 my-categories.txt
-outputs/*
+**outputs/*
+**emails/*

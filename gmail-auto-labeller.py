@@ -9,6 +9,9 @@ from langchain.prompts import ChatPromptTemplate
 from dotenv import load_dotenv
 import os
 import argparse
+from pydantic import BaseModel, Field
+from typing import Optional
+from langchain.output_parsers import PydanticOutputParser
 
 load_dotenv()
 
@@ -77,17 +80,31 @@ def get_unread_emails_info(args):
         # date_str = datetime.fromtimestamp(int(msg['internalDate'])/1000).strftime('%Y-%m-%d %H:%M:%S')
         # subject = f"Date: {date_str} --- Subject: {subject} --- Labels: {msg['labelIds']}"
 
-        # message_content = get_message_content(msg['payload'])
+        message_content = get_message_content(msg['payload'])
         # print(f"{message_content[:200]}..." if len(message_content) > 200 else message_content)
         # print(message_content)
         # print('----------EOM--------------')
-        
+
+        if message_content:
+                base_file_path = f"emails/{datetime.now().strftime('%Y%m%d%H%M')}"
+
+                # Create emails directory and any parent directories if they don't exist
+                os.makedirs(base_file_path, exist_ok=True)
+
+                # Ensure subject is safe for file paths and create subdirectories if needed
+                safe_subject = "".join(c for c in subject if c.isalnum() or c in (' ', '-', '_'))
+                file_path = os.path.join(base_file_path, safe_subject + '.html')
+
+                # Save HTML content to file
+                with open(file_path, 'w', encoding='utf-8') as f:
+                    f.write(message_content)
+
         email_info.append({
             'sender': sender,
             'subject': subject,
             'snippet': msg['snippet'],
-            #'content': message_content
-        })
+            'content': message_content
+    })
     
     return email_info
 
@@ -128,6 +145,77 @@ def list_all_labels():
     except Exception as e:
         print(f'An error occurred: {e}')
         return []
+    
+class EmailSummary(BaseModel):
+    summary: str = Field(description="Summary of the email content.")
+    category: str = Field(description="Category of the email (e.g., Social Media, Updates, Promotions, Reminders, Receipts).")
+    category_reasoning: str = Field(description="Reason for the inferred category of the email.")
+
+def summarize_email_content(email_info):
+    """
+    Function to summarize the contents of the email by sending it to LLM for easier classification.
+    Args:
+        email_info: List of email details like Subject, Received From, Email Content etc.,
+    
+    Returns:
+        Email summaries.
+    """
+    
+    # Initialize the LLM
+    llm = ChatOpenAI(
+        temperature=0,  # We want consistent results for classification
+        model="gpt-4o-mini"  # You can change this to gpt-4 if needed
+    )
+    
+    # Create the prompt template
+    template = """
+        You are an expert in analyzing html content. I am providing an HTML file that contains content of an email message like articles, updates, notifications, reminders, statements etc., Please do the following:
+
+        ###Rules for Extracting Meaningful content
+        - Extract the core content from the HTML file, ignoring banners, styles, hyperlinks and other decorative or extraneous elements.
+        - Do not return this information. This is only to help you with the summarization.
+
+        ###Rules for summarizing the extracted content
+        - Summarize the meaningful information in one paragraph.
+        - Do not include links or any html elements in the summary.
+        - Ensure that all the important points are addressed in the summary.
+
+        ###Rules for Categorization
+        - Categorize the content based on its purpose, such as Social Media Notifications, Informational Emails, Updates, Promotions, Reminders, Receipts etc..
+        
+        email content:
+        {message_content}
+        
+        Provide the output in the following JSON structure:
+        {format_instructions}"""
+    #TODO: Update this instruction for all possible categories?
+    # - Summarize the meaningful information in a structured format. Focus on key details like titles, authors, main text content, engagement metrics, and actionable links.
+
+    prompt = ChatPromptTemplate.from_template(template)
+
+    # Create a parser that forces the LLM to output in our desired format
+    parser = PydanticOutputParser(pydantic_object=EmailSummary)
+    
+    for email in email_info:
+        messages = prompt.format_messages(
+            message_content=email['content'],
+            format_instructions=parser.get_format_instructions()
+            )
+        # Get the classification from the LLM
+        response = llm.invoke(messages)
+
+        try:
+            parsed_summary = parser.parse(response.content)
+            email['summary'] = parsed_summary.model_dump()
+        except Exception as e:
+            print(f"Error parsing LLM response: {e}")
+            email['summary'] = {
+                'summary': 'Error parsing response',
+                'category': 'None',
+                'category_reasoning': 'None'
+            }
+        
+    return email_info
 
 def classify_email(email_info, available_labels):
     """
@@ -210,13 +298,13 @@ def classify_email(email_info, available_labels):
                 labels="\n".join(label_names),
                 email_from=email['sender'],
                 email_subject=email['subject'],
-                email_content=email['snippet'] #email['content']
+                email_content=email['summary'] #email['snippet'] #email['content']
             )
         else:
             messages = prompt_without_labels.format_messages(
                 email_from=email['sender'],
                 email_subject=email['subject'],
-                email_content=email['snippet'] #email['content']
+                email_content=email['summary'] #email['snippet'] #email['content']
             )            
         
         # Get the classification from the LLM
@@ -227,6 +315,7 @@ def classify_email(email_info, available_labels):
         classifications.append((email['subject'], suggested_label))
         
     return classifications
+
 
 if __name__ == '__main__':
     # Set up argument parser
@@ -275,6 +364,11 @@ if __name__ == '__main__':
         help='Maximum number of unread emails to process (default: 25)'
     )
     parser.add_argument(
+        '--use-email-content', 
+        action='store_false', 
+        help='If set, will also uses the contents of the email to get additional context about the email. WARNING: Will result in additional LLM Token costs.'
+    )
+    parser.add_argument(
         '--print', 
         action='store_true',
         help='Print results to console in addition to saving to file'
@@ -289,6 +383,9 @@ if __name__ == '__main__':
     
     # Get unread email info with max_results parameter
     email_info = get_unread_emails_info(args)
+
+    # Summarize the email content for easier classification
+    email_info = summarize_email_content(email_info=email_info)
     
     # Classify the emails
     print("\nClassifying emails...")
@@ -303,6 +400,15 @@ if __name__ == '__main__':
     
     # Write results to file
     with open(output_file, 'w', encoding='utf-8') as f:
+        f.write("Summarization Results:\n")
+        for email in email_info:
+            f.write(f"\nEmail: {email['subject']}\n")
+            f.write(f"Summary: {email['summary']}\n")
+            # Print to console if --print flag is used
+            if args.print:
+                print(f"\nEmail: {email['subject']}")
+                print(f"Summary: {email['summary']}")
+
         f.write("Classification Results:\n")
         for subject, label in classifications:
             f.write(f"\nEmail: {subject}\n")
@@ -311,5 +417,5 @@ if __name__ == '__main__':
             if args.print:
                 print(f"\nEmail: {subject}")
                 print(f"Suggested Label: {label}")
-    
+
     print(f"\nResults have been written to: {output_file}")
