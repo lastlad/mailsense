@@ -10,7 +10,6 @@ from dotenv import load_dotenv
 import os
 import argparse
 from pydantic import BaseModel, Field
-from typing import Optional
 from langchain.output_parsers import PydanticOutputParser
 
 load_dotenv()
