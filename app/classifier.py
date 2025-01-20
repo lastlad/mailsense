@@ -1,14 +1,25 @@
 import os
 import sys
+import logging
 import argparse
 from datetime import datetime
 from dotenv import load_dotenv
 load_dotenv()
 
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler('classifier.log'),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
+
 # Add project root to Python path
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(project_root)
-
 
 from modules.auth import GmailAuth
 from modules.email import EmailProcessor
@@ -18,27 +29,34 @@ from modules.llm import LLMProcessor
 class EmailClassifier:
     def __init__(self, args):
         self.args = args
+        logger.info("Initializing EmailClassifier")
         self.service = GmailAuth.get_gmail_service()
         self.labels_manager = GmailLabels(self.service)
         self.email_processor = EmailProcessor(self.service)
-        self.llm_processor = LLMProcessor(args.llm)
+        self.llm_processor = LLMProcessor(self.args)
 
     def run(self):
+        logger.info("Starting email classification process")
         # Get labels if needed
         all_labels = []
         if self.args.use_user_labels:
+            logger.info("Fetching user labels")
             all_labels = self.labels_manager.list_user_labels()
 
         # Process emails
-        email_info = self.email_processor.get_unread_emails(self.args.max_emails)
-        email_info = self.llm_processor.summarize_emails(email_info)
-        classifications = self.llm_processor.classify_emails(email_info, all_labels)
+        logger.info(f"Fetching up to {self.args.max_emails} unread emails")
+        email_info = self.email_processor.get_unread_emails(self.args)
+        logger.info("Summarizing emails")
+        email_info = self.llm_processor.summarize_emails(self.args, email_info)
+        logger.info("Classifying emails")
+        classifications = self.llm_processor.classify_emails(self.args, email_info, all_labels)
 
         # Save results
         self._save_results(email_info, classifications)
 
     def _save_results(self, email_info, classifications):
-    # Create outputs directory if it doesn't exist
+        logger.info("Saving results")
+        # Create outputs directory if it doesn't exist
         os.makedirs('outputs', exist_ok=True)
         
         # Generate filename with timestamp
@@ -46,36 +64,50 @@ class EmailClassifier:
         output_file = f'outputs/output-{timestamp}.txt'
         
         # Write results to file
-        with open(output_file, 'w', encoding='utf-8') as f:
-            f.write("Summarization Results:\n")
-            for email in email_info:
-                f.write(f"\nEmail: {email['subject']}\n")
-                f.write(f"Summary: {email['summary']}\n")
-                # Print to console if --print flag is used
-                if args.print:
-                    print(f"\nEmail: {email['subject']}")
-                    print(f"Summary: {email['summary']}")
+        try:
+            with open(output_file, 'w', encoding='utf-8') as f:
+                f.write("Summarization Results:\n")
+                for email in email_info:
+                    f.write(f"\nDate: {email['date']}\n")
+                    f.write(f"Email: {email['subject']}\n")
+                    f.write(f"Summary: {email['summary']}\n")
+                    # Print to console if --print flag is used
+                    if self.args.print:
+                        print(f"\nDate: {email['date']}")
+                        print(f"Email: {email['subject']}")
+                        print(f"Summary: {email['summary']}")
 
-            f.write("Classification Results:\n")
-            for subject, label in classifications:
-                f.write(f"\nEmail: {subject}\n")
-                f.write(f"Suggested Label: {label}\n")
-                # Print to console if --print flag is used
-                if args.print:
-                    print(f"\nEmail: {subject}")
-                    print(f"Suggested Label: {label}")
+                f.write("\nClassification Results:\n")
+                for subject, label in classifications:
+                    f.write(f"\nEmail: {subject}\n")
+                    f.write(f"Suggested Label: {label}\n")
+                    # Print to console if --print flag is used
+                    if self.args.print:
+                        print(f"\nEmail: {subject}")
+                        print(f"Suggested Label: {label}")
 
-        print(f"\nResults have been written to: {output_file}")
+            logger.info(f"Results written to: {output_file}")
+        except Exception as e:
+            logger.error(f"Error writing results to file: {e}")
+            raise
 
 if __name__ == '__main__':
+    logger.info("Starting email classifier application")
     # Set up argument parser
     parser = argparse.ArgumentParser(description='email classifier')
     parser.add_argument(
-        '--llm', 
+        '--provider', 
+        default='openai',
+        required=False,
+        choices=['openai','bedrock','ollama','anthropic','huggingface'],
+        help='LLM provider to use.'
+    )
+    parser.add_argument(
+        '--model-name', 
         default='gpt-4o-mini',
         required=False,
-        choices=['gpt-35','gpt-4o-mini','gpt-4o','claude-sonnet-35','claude-haiku-35'],
-        help='LLM provider to use.'
+        choices=['gpt-4o-mini','gpt-4o','claude-sonnet-35','claude-haiku-35','llama-33-70B'],
+        help='LLM Model to use.'
     )
     parser.add_argument(
         '--llm-api-keys',
@@ -109,9 +141,28 @@ if __name__ == '__main__':
     parser.add_argument(
         '--max-emails', 
         type=int, 
-        default=25,
+        default=15,
         required=False,
         help='Maximum number of unread emails to process (default: 25)'
+    )
+    parser.add_argument(
+        '--days-old', 
+        type=int, 
+        default=2,
+        required=False,
+        help='Maximum number of look back days for fetching the emails. (E.g: Last 7 days.)'
+    )
+    parser.add_argument(
+        '--start-date', 
+        type=str, 
+        required=False,
+        help='Start Date for the email fetch in YYYY-MM-DD format.'
+    )
+    parser.add_argument(
+        '--end-date', 
+        type=str, 
+        required=False,
+        help='End Date for the email fetch in YYYY-MM-DD format.'
     )
     parser.add_argument(
         '--use-email-content', 

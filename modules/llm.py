@@ -1,4 +1,6 @@
 from langchain_openai import ChatOpenAI
+from langchain_aws import ChatBedrock
+from langchain_ollama import ChatOllama
 from langchain.prompts import ChatPromptTemplate
 from langchain.output_parsers import PydanticOutputParser
 from typing import List, Dict, Tuple
@@ -6,23 +8,40 @@ from typing import List, Dict, Tuple
 from modules.model import EmailSummary
 
 class LLMProcessor:
-    def __init__(self, model_name: str):
-        self.llm = ChatOpenAI(temperature=0, model=model_name)
+    def __init__(self, args: any):
+       
+        # Initialize the appropriate LLM based on the provider
+        if args.provider == "openai":
+            self.llm = ChatOpenAI(temperature=0.3, model=args.model_name)
+        elif args.provider == "bedrock":
+            self.llm = ChatBedrock(
+                model_id=args.model_name,
+                model_kwargs={"temperature": 0.3}
+            )
+        elif args.provider == "ollama":
+            self.llm = ChatOllama(
+                model=args.model_name,
+                temperature=0.3
+            )
+        else:
+            raise ValueError(f"Unsupported LLM provider: {args.provider}")
+
         self.parser = PydanticOutputParser(pydantic_object=EmailSummary)
 
-    def summarize_emails(self, email_info: List[Dict]) -> List[Dict]:
+    def summarize_emails(self, args: any, email_info: List[Dict]) -> List[Dict]:
 
         template = """
             You are an expert in analyzing html content. I am providing an HTML file that contains content of an email message like articles, updates, notifications, reminders, statements etc., Please do the following:
 
             ###Rules for Extracting Meaningful content
             - Extract the core content from the HTML file, ignoring banners, styles, hyperlinks and other decorative or extraneous elements.
+            - Extract any named entity information that will help in understanding the context of the email.
             - Do not return this information. This is only to help you with the summarization.
 
             ###Rules for summarizing the extracted content
             - Summarize the meaningful information in one paragraph.
             - Do not include links or any html elements in the summary.
-            - Ensure that all the important points are addressed in the summary.
+            - Ensure that all the important points are addressed in the summary including but not limited to entities, names, balances, etc.,.
 
             ###Rules for Categorization
             - Categorize the content based on its purpose, such as Social Media Notifications, Informational Emails, Updates, Promotions, Reminders, Receipts etc..
@@ -54,7 +73,7 @@ class LLMProcessor:
         
         return email_info
 
-    def classify_emails(self, email_info: List[Dict], available_labels: List[Dict]) -> List[Tuple[str, str]]:
+    def classify_emails(self, args: any, email_info: List[Dict], available_labels: List[Dict]) -> List[Tuple[str, str]]:
         """
         Uses LangChain and an LLM to classify emails based on their subjects and available labels.
         

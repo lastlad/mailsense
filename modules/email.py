@@ -1,6 +1,9 @@
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Dict, Optional
+import logging
+
+logger = logging.getLogger(__name__)
 
 class EmailProcessor:
     def __init__(self, service):
@@ -21,15 +24,33 @@ class EmailProcessor:
             return text
         return ''
 
-    def get_unread_emails(self, max_emails: int) -> List[Dict]:
+    def get_unread_emails(self, args: any) -> List[Dict]:
         """Fetches details of unread emails."""
+
+        filter_query = 'is:unread'
+
+        if args.start_date and args.end_date:
+            start_date = datetime.strptime(args.start_date, '%Y-%m-%d')
+            end_date = datetime.strptime(args.end_date, '%Y-%m-%d')
+            date_diff = end_date - start_date
+            if date_diff.days < 30:
+                filter_query += f" after:{args.start_date} before: {args.end_date}"
+            else:
+                end_date = start_date + timedelta(days=30)
+                filter_query += f" after:{args.start_date} before: {args.end_date}"
+        elif args.days_old:
+            # Calculate date from N days ago and format as YYYY/MM/DD
+            date_filter = (datetime.now() - timedelta(days=args.days_old)).strftime('%Y/%m/%d')
+            filter_query += f" after:{date_filter}"
+
+        logger.info(f"Filter Query used: {filter_query}")
         
         # Get unread messages.
         results = self.service.users().messages().list(
             userId='me',
             labelIds=['UNREAD', 'CATEGORY_UPDATES'], #'CATEGORY_PERSONAL'
-            q='is:unread',
-            maxResults=max_emails
+            q=filter_query, #'is:unread',
+            maxResults=args.max_emails
         ).execute()
         
         messages = results.get('messages', [])
@@ -56,8 +77,8 @@ class EmailProcessor:
         headers = msg['payload']['headers']
         subject = next((header['value'] for header in headers if header['name'] == 'Subject'), '')
         sender = next((header['value'] for header in headers if header['name'] == 'From'), '')
+        date_str = datetime.fromtimestamp(int(msg['internalDate'])/1000).strftime('%Y-%m-%d %H:%M:%S')
 
-        # date_str = datetime.fromtimestamp(int(msg['internalDate'])/1000).strftime('%Y-%m-%d %H:%M:%S')
         # subject = f"Date: {date_str} --- Subject: {subject} --- Labels: {msg['labelIds']}"
 
         message_content = self.get_message_content(msg['payload'])
@@ -71,6 +92,7 @@ class EmailProcessor:
         return {
             'sender': sender,
             'subject': subject,
+            'date': date_str,
             'snippet': msg['snippet'],
             'content': message_content
         }
