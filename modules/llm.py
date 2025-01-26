@@ -41,10 +41,14 @@ class LLMProcessor:
             ###Rules for summarizing the extracted content
             - Summarize the meaningful information in one paragraph.
             - Do not include links or any html elements in the summary.
-            - Ensure that all the important points are addressed in the summary including but not limited to entities, names, balances, etc.,.
+            - Ensure that all the important points are addressed in the summary including but not limited to entities, names, balances, deadlines, etc.,.
 
             ###Rules for Categorization
             - Categorize the content based on its purpose, such as Social Media Notifications, Informational Emails, Updates, Promotions, Reminders, Receipts etc..
+            - Categorize into a Major caregory and a Minor Category. 
+            - Major Category is one that identifies the entities that the content is about. Like credit card companies, utility companies, social media companies etc.,
+            - Return the entity name like Chase, Discover, Cox, Linkedin, Facebook, etc., 
+            - Minor Category is one that identifies the sub category like Promotions, Bills, Updates etc., 
             
             email content:
             {message_content}
@@ -67,7 +71,8 @@ class LLMProcessor:
                 print(f"Error parsing LLM response: {e}")
                 email['summary'] = {
                     'summary': 'Error parsing response',
-                    'category': 'None',
+                    'category_major': 'None',
+                    'category_minor': 'None',
                     'category_reasoning': 'None'
                 }
         
