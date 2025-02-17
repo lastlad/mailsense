@@ -37,19 +37,25 @@ class EmailClassifier:
 
     def run(self):
         logger.info("Starting email classification process")
+
+        # Process emails
+        logger.info(f"Fetching up to {self.args.max_emails} unread emails")
+        email_info = self.email_processor.get_unread_emails(self.args)
+
+        # Summarizing emails
+        logger.info("Summarizing emails")
+        email_info = self.llm_processor.summarize_emails(self.args, email_info)
+
+        logger.info("Classifying emails")
+
         # Get labels if needed
         all_labels = []
         if self.args.use_user_labels:
             logger.info("Fetching user labels")
             all_labels = self.labels_manager.list_user_labels()
 
-        # Process emails
-        logger.info(f"Fetching up to {self.args.max_emails} unread emails")
-        email_info = self.email_processor.get_unread_emails(self.args)
-        logger.info("Summarizing emails")
-        email_info = self.llm_processor.summarize_emails(self.args, email_info)
-        logger.info("Classifying emails")
         classifications = self.llm_processor.classify_emails(self.args, email_info, all_labels)
+        # classifications = []
 
         # Save results
         self._save_results(email_info, classifications)
@@ -106,7 +112,7 @@ if __name__ == '__main__':
         '--model-name', 
         default='gpt-4o-mini',
         required=False,
-        choices=['gpt-4o-mini','gpt-4o','claude-sonnet-35','claude-haiku-35','llama-33-70B'],
+        choices=['gpt-4o-mini','gpt-4o','claude-sonnet-35','claude-haiku-35','llama-33-70B', 'deepseek-r1:7b'],
         help='LLM Model to use.'
     )
     parser.add_argument(

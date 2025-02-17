@@ -4,6 +4,8 @@ from langchain_ollama import ChatOllama
 from langchain.prompts import ChatPromptTemplate
 from langchain.output_parsers import PydanticOutputParser
 from typing import List, Dict, Tuple
+import boto3
+from botocore.config import Config
 
 from modules.model import EmailSummary
 
@@ -14,9 +16,31 @@ class LLMProcessor:
         if args.provider == "openai":
             self.llm = ChatOpenAI(temperature=0.3, model=args.model_name)
         elif args.provider == "bedrock":
+            # Configure AWS Bedrock client
+            config = Config(
+                region_name='us-east-2',  # e.g. "us-east-1"
+                retries={
+                    'max_attempts': 3,
+                    'mode': 'standard'
+                }
+            )
+            
+            # Initialize Bedrock client with credentials
+            bedrock_client = boto3.client(
+                service_name='bedrock-runtime',
+                region_name='us-east-2',
+                config=config
+            )
+
+            # Initialize Bedrock Chat model
             self.llm = ChatBedrock(
-                model_id=args.model_name,
-                model_kwargs={"temperature": 0.3}
+                model_id= "us.amazon.nova-pro-v1:0", #"us.anthropic.claude-3-5-sonnet-20241022-v2:0", #args.model_name,  # e.g. "anthropic.claude-v2"
+                client=bedrock_client,
+                model_kwargs={
+                    "temperature": 0.1,
+                    "max_tokens": 500,
+                    "top_p": 0.5
+                }
             )
         elif args.provider == "ollama":
             self.llm = ChatOllama(
@@ -91,17 +115,22 @@ class LLMProcessor:
         """
         # Extract just the label names from the label objects
         label_names = [label['name'] for label in available_labels]
-        
-        # Initialize the LLM
-        llm = ChatOpenAI(
-            temperature=0,  # We want consistent results for classification
-            model="gpt-4o-mini"  # You can change this to gpt-4 if needed
-        )
-        
+                
         # Create the prompt template
         template = """You are an email classifier. Given the following email information and available Gmail labels, 
         suggest the most appropriate label for each email based on the given email subject, email content and the sender of the email. Only suggest labels from the provided list.    
 
+        Carefully read through the content of the email to understand the context of the email. Do not match to a label just because you see a related label. Let me explain with few examples:
+
+        Example - 1:
+        You may get see an email coming from discover.com domain. But the content may not be anything important or urgent and can be a promotional email. In this case the label should be `00 - Financials` and not `00 - Financials/Discover`
+
+        Example - 2:
+        The email is received from linkedin.com domain. However content may not be anything important but rather just some updates from my linkedin connections. In this case the label should not not `99 - Misc/Jobs` but `99 - Misc`
+
+        Please respond with only the label name for this email. If no label fits, respond with "NONE".        
+        Choose only from the given list of labels. Do not come up with new labels.
+        
         Available Labels:
         {labels}
 
@@ -113,28 +142,10 @@ class LLMProcessor:
 
         Email Content:
         {email_content}
-
-        Carefully read through the content of the email to understand the context of the email. Do not match to a label just because you see a related label. Let me explain with few examples:
-
-        Example - 1:
-        You may get see an email coming from discover.com domain. But the content may not be anything important or urgent and can be a promotional email. In this case the label should be `00 - Financials` and not `00 - Financials/Discover`
-
-        Example - 2:
-        The email is received from linkedin.com domain. However content may not be anything important but rather just some updates from my linkedin connections. In this case the label should not not `99 - Misc/Jobs` but `99 - Misc`
-
-        Please respond with only the label name for this email. If no label fits, respond with "NONE".
-        Choose only from the exact labels provided above."""
+        
+        """
 
         template_without_labels = """You are an email classifier. Given the following email information, suggest the most appropriate label for each email based on the given email subject, email content and the sender of the email.
-
-        Email Received From:
-        {email_from}
-
-        Email Subject:
-        {email_subject}
-
-        Email Content:
-        {email_content}
 
         Carefully read through the content of the email to understand the context of the email. Do not match to a label just because you see a related label. Let me explain with few examples:
 
@@ -144,7 +155,17 @@ class LLMProcessor:
         Example - 2:
         The email is received from linkedin.com domain. However content may not be anything important but rather just some updates from my linkedin connections. In this case the label should be `Misc/Updates` and not `Misc/Jobs`.
 
-        Please respond with only the label name for this email."""
+        Please respond with only the label name for this email.
+        
+        Email Received From:
+        {email_from}
+
+        Email Subject:
+        {email_subject}
+
+        Email Content:
+        {email_content}        
+        """
 
         prompt = ChatPromptTemplate.from_template(template)
         prompt_without_labels = ChatPromptTemplate.from_template(template_without_labels)
@@ -168,8 +189,7 @@ class LLMProcessor:
                     email_content=email['summary'] #email['snippet'] #email['content']
                 )            
             
-            # Get the classification from the LLM
-            response = llm.invoke(messages)
+            response = self.llm.invoke(messages)
             suggested_label = response.content.strip()
             
             # Add to our results
