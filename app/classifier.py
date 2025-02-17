@@ -50,7 +50,7 @@ class EmailClassifier:
 
         # Get labels if needed
         all_labels = []
-        if self.args.use_user_labels:
+        if not self.args.skip_user_labels:
             logger.info("Fetching user labels")
             all_labels = self.labels_manager.list_user_labels()
 
@@ -127,10 +127,12 @@ if __name__ == '__main__':
     #     default=True,
     #     help='Label on the unread emails. *** Be cautious as labelling all emails will be expensive.'
     # )
+    #TODO: Refactor to use `action` instead of type.
     parser.add_argument(
-        '--use-user-labels',
-        action='store_true',
-        help='Use existing user defined labels to classify the email. If none of the lables match, its marked as NONE.'
+        '--skip-user-labels',
+        type=bool,
+        default=False,
+        help='Skip using existing user defined labels to classify emails. By default, user labels will be used.'
     )
     parser.add_argument(
         '--create-labels', 
