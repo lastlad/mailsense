@@ -10,6 +10,7 @@ Icon
 .venv
 .env
 token.json
+token.pickle
 credentials.json
 
 # Python
@@ -50,3 +51,4 @@ htmlcov/
 # Project specific files
 my-categories.txt
 **outputs/*
+classifier.log

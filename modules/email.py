@@ -90,6 +90,7 @@ class EmailProcessor:
             self._save_email_content(message_content, subject)
 
         return {
+            'id': message_id,
             'sender': sender,
             'subject': subject,
             'date': date_str,

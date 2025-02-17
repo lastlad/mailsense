@@ -55,7 +55,13 @@ class EmailClassifier:
             all_labels = self.labels_manager.list_user_labels()
 
         classifications = self.llm_processor.classify_emails(self.args, email_info, all_labels)
-        # classifications = []
+
+        # Apply labels if not in dry run mode
+        if not self.args.dry_run:
+            logger.info("Applying labels to emails")
+            self.labels_manager.update_labels(email_info, classifications)
+        else:
+            logger.info("Dry run.... Not Modifying the labels of email.")
 
         # Save results
         self._save_results(email_info, classifications)
