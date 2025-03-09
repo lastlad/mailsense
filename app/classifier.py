@@ -2,7 +2,6 @@ import os
 import sys
 import logging
 import argparse
-from datetime import datetime
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -32,46 +31,58 @@ class EmailClassifier:
         self.args = args
         logger.info("Initializing EmailClassifier")
         self.service = GmailAuth.get_gmail_service()
+        self.output_writer = OutputWriter()
         self.labels_manager = GmailLabels(self.service)
         self.email_processor = EmailProcessor(self.service)
         self.llm_processor = LLMProcessor(self.args)
-        self.output_writer = OutputWriter()
 
     def run(self):
-        logger.info("Starting email classification process")
+        try:
+            logger.info("Starting email classification process")
 
-        # Process emails
-        logger.info(f"Fetching up to {self.args.max_emails} unread emails")
-        email_info = self.email_processor.get_unread_emails(self.args)
+            # Process emails
+            logger.info(f"Fetching up to {self.args.max_emails} unread emails")
+            email_info = self.email_processor.get_unread_emails(self.args)
+            self.output_writer.save_step_output(
+                email_info, 
+                'emails',
+                print_to_console=self.args.print
+            )
 
-        # Summarizing emails
-        logger.info("Summarizing emails")
-        email_info = self.llm_processor.summarize_emails(self.args, email_info)
+            # Summarize emails
+            logger.info("Summarizing emails")
+            email_info = self.llm_processor.summarize_emails(self.args, email_info)
+            self.output_writer.save_step_output(
+                email_info, 
+                'summaries',
+                print_to_console=self.args.print
+            )
 
-        logger.info("Classifying emails")
+            logger.info("Classifying emails")
 
-        # Get labels if needed
-        all_labels = []
-        if not self.args.skip_user_labels:
-            logger.info("Fetching user labels")
-            all_labels = self.labels_manager.list_user_labels()
+            # Get labels if needed
+            all_labels = []
+            if not self.args.skip_user_labels:
+                logger.info("Fetching user labels")
+                all_labels = self.labels_manager.list_user_labels()
 
-        classifications = self.llm_processor.classify_emails(self.args, email_info, all_labels)
+            classifications = self.llm_processor.classify_emails(self.args, email_info, all_labels)
+            self.output_writer.save_step_output(
+                classifications, 
+                'classifications',
+                print_to_console=self.args.print
+            )
 
-        # Apply labels if not in dry run mode
-        if not self.args.dry_run:
-            logger.info("Applying labels to emails")
-            self.labels_manager.update_labels(email_info, classifications)
-        else:
-            logger.info("Dry run.... Not Modifying the labels of email.")
+            # Apply labels if not in dry run mode
+            if not self.args.dry_run:
+                logger.info("Applying labels to emails")
+                self.labels_manager.update_labels(email_info, classifications)
+            else:
+                logger.info("Dry run.... Not Modifying the labels of email.")
 
-        # Save results
-        output_file = self.output_writer.write_results(
-            email_info, 
-            classifications, 
-            print_to_console=self.args.print
-        )
-        logger.info(f"Process completed. Results saved to {output_file}")
+        except Exception as e:
+            logger.error(f"Error in run method: {str(e)}")
+            raise
 
 if __name__ == '__main__':
     logger.info("Starting email classifier application")

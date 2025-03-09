@@ -58,10 +58,8 @@ class EmailProcessor:
         # print(message_content)
         # print('----------EOM--------------')
         
-        if message_content:
-            text_content = self._save_email_content(message_content, subject)
-        else:
-            text_content = ""
+        # Sanitize the email content to remove HTML tags and other formatting
+        sanitized_message_content = self.text_maker.handle(message_content)
 
         return {
             'id': message_id,
@@ -69,40 +67,8 @@ class EmailProcessor:
             'subject': subject,
             'date': date_str,
             'snippet': msg['snippet'],
-            'content': text_content
+            'content': sanitized_message_content
         }
-
-    def _save_email_content(self, content: str, subject: str) -> str:
-        """
-        Saves both HTML and text versions of email content and returns the text content
-        """
-        # Get the project root directory
-        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        timestamp_dir = datetime.now().strftime('%Y%m%d%H%M')
-        base_file_path = f"{project_root}/outputs/emails/{timestamp_dir}"
-
-        # Create emails directory and any parent directories
-        os.makedirs(base_file_path, exist_ok=True)
-        
-        # Create safe filename from subject
-        safe_subject = "".join(c for c in subject if c.isalnum() or c in (' ', '-', '_'))
-        
-        # Convert HTML to text
-        text_content = self.text_maker.handle(content)
-
-        # Save both HTML and text versions
-        html_path = os.path.join(base_file_path, f"{safe_subject}.html")
-        text_path = os.path.join(base_file_path, f"{safe_subject}.txt")
-        
-        # Save HTML content
-        with open(html_path, 'w', encoding='utf-8') as f:
-            f.write(content)
-        
-        # Save text content
-        with open(text_path, 'w', encoding='utf-8') as f:
-            f.write(text_content)
-
-        return text_content
 
     def get_unread_emails(self, args: any) -> List[Dict]:
         """Fetches details of unread emails."""
