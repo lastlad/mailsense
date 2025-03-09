@@ -34,7 +34,23 @@ class EmailClassifier:
         self.output_writer = OutputWriter()
         self.labels_manager = GmailLabels(self.service)
         self.email_processor = EmailProcessor(self.service)
-        self.llm_processor = LLMProcessor(self.args)
+        
+        # Initialize LLM processors using either specific or default settings
+        self.summary_llm = LLMProcessor(
+            provider=args.summary_provider or args.provider,
+            model_name=args.summary_model or args.model
+        )
+        
+        # Use the same LLM instance if no specific classification settings provided
+        if not any([args.classify_provider, args.classify_model]):
+            logger.info("Using same LLM for classification and summarization")
+            self.classify_llm = self.summary_llm
+        else:
+            logger.info("Using separate LLM for classification")
+            self.classify_llm = LLMProcessor(
+                provider=args.classify_provider or args.provider,
+                model_name=args.classify_model or args.model
+            )
 
     def run(self):
         try:
@@ -49,16 +65,14 @@ class EmailClassifier:
                 print_to_console=self.args.print
             )
 
-            # Summarize emails
+            # Summarize emails using summary LLM
             logger.info("Summarizing emails")
-            email_info = self.llm_processor.summarize_emails(self.args, email_info)
+            email_info = self.summary_llm.summarize_emails(self.args, email_info)
             self.output_writer.save_step_output(
                 email_info, 
                 'summaries',
                 print_to_console=self.args.print
             )
-
-            logger.info("Classifying emails")
 
             # Get labels if needed
             all_labels = []
@@ -66,7 +80,9 @@ class EmailClassifier:
                 logger.info("Fetching user labels")
                 all_labels = self.labels_manager.list_user_labels()
 
-            classifications = self.llm_processor.classify_emails(self.args, email_info, all_labels)
+            # Classify emails using classification LLM
+            logger.info("Classifying emails")
+            classifications = self.classify_llm.classify_emails(self.args, email_info, all_labels)
             self.output_writer.save_step_output(
                 classifications, 
                 'classifications',
@@ -86,22 +102,51 @@ class EmailClassifier:
 
 if __name__ == '__main__':
     logger.info("Starting email classifier application")
-    # Set up argument parser
     parser = argparse.ArgumentParser(description='email classifier')
+    
+    # Common LLM arguments
     parser.add_argument(
         '--provider', 
         default='openai',
-        required=False,
         choices=['openai','bedrock','ollama','anthropic','huggingface'],
-        help='LLM provider to use.'
+        help='Default LLM provider to use. Can be overridden by --summary-provider or --classify-provider'
     )
     parser.add_argument(
-        '--model-name', 
+        '--model', 
         default='gpt-4o-mini',
-        required=False,
         choices=['gpt-4o-mini','gpt-4o','claude-sonnet-35','claude-haiku-35','llama-33-70B', 'deepseek-r1:7b'],
-        help='LLM Model to use.'
+        help='Default LLM Model to use. Can be overridden by --summary-model or --classify-model'
     )
+
+    # Optional separate summarization LLM arguments
+    parser.add_argument(
+        '--summary-provider', 
+        default=None,
+        choices=['openai','bedrock','ollama','anthropic','huggingface'],
+        help='Override: LLM provider to use for summarization.'
+    )
+    parser.add_argument(
+        '--summary-model', 
+        default=None,
+        choices=['gpt-4o-mini','gpt-4o','claude-sonnet-35','claude-haiku-35','llama-33-70B', 'deepseek-r1:7b'],
+        help='Override: LLM Model to use for summarization.'
+    )
+
+    # Optional separate classification LLM arguments
+    parser.add_argument(
+        '--classify-provider', 
+        default=None,
+        choices=['openai','bedrock','ollama','anthropic','huggingface'],
+        help='Override: LLM provider to use for classification.'
+    )
+    parser.add_argument(
+        '--classify-model', 
+        default=None,
+        choices=['gpt-4o-mini','gpt-4o','claude-sonnet-35','claude-haiku-35','llama-33-70B', 'deepseek-r1:7b'],
+        help='Override: LLM Model to use for classification.'
+    )
+
+    # Existing arguments...
     parser.add_argument(
         '--llm-api-keys',
         type=str,
