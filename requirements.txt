@@ -7,3 +7,4 @@ langchain-aws
 langchain-ollama
 python-dotenv
 pydantic
+html2text

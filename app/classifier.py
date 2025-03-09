@@ -25,6 +25,7 @@ from modules.auth import GmailAuth
 from modules.email import EmailProcessor
 from modules.label import GmailLabels
 from modules.llm import LLMProcessor
+from modules.output import OutputWriter
 
 class EmailClassifier:
     def __init__(self, args):
@@ -34,6 +35,7 @@ class EmailClassifier:
         self.labels_manager = GmailLabels(self.service)
         self.email_processor = EmailProcessor(self.service)
         self.llm_processor = LLMProcessor(self.args)
+        self.output_writer = OutputWriter()
 
     def run(self):
         logger.info("Starting email classification process")
@@ -64,44 +66,12 @@ class EmailClassifier:
             logger.info("Dry run.... Not Modifying the labels of email.")
 
         # Save results
-        self._save_results(email_info, classifications)
-
-    def _save_results(self, email_info, classifications):
-        logger.info("Saving results")
-        # Create outputs directory if it doesn't exist
-        os.makedirs('outputs', exist_ok=True)
-        
-        # Generate filename with timestamp
-        timestamp = datetime.now().strftime('%Y%m%d%H%M')
-        output_file = f'outputs/output-{timestamp}.txt'
-        
-        # Write results to file
-        try:
-            with open(output_file, 'w', encoding='utf-8') as f:
-                f.write("Summarization Results:\n")
-                for email in email_info:
-                    f.write(f"\nDate: {email['date']}\n")
-                    f.write(f"Email: {email['subject']}\n")
-                    f.write(f"Summary: {email['summary']}\n")
-                    # Print to console if --print flag is used
-                    if self.args.print:
-                        print(f"\nDate: {email['date']}")
-                        print(f"Email: {email['subject']}")
-                        print(f"Summary: {email['summary']}")
-
-                f.write("\nClassification Results:\n")
-                for subject, label in classifications:
-                    f.write(f"\nEmail: {subject}\n")
-                    f.write(f"Suggested Label: {label}\n")
-                    # Print to console if --print flag is used
-                    if self.args.print:
-                        print(f"\nEmail: {subject}")
-                        print(f"Suggested Label: {label}")
-
-            logger.info(f"Results written to: {output_file}")
-        except Exception as e:
-            logger.error(f"Error writing results to file: {e}")
-            raise
+        output_file = self.output_writer.write_results(
+            email_info, 
+            classifications, 
+            print_to_console=self.args.print
+        )
+        logger.info(f"Process completed. Results saved to {output_file}")
 
 if __name__ == '__main__':
     logger.info("Starting email classifier application")

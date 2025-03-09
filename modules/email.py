@@ -2,12 +2,27 @@ import os
 from datetime import datetime, timedelta
 from typing import List, Dict, Optional
 import logging
+import html2text
 
 logger = logging.getLogger(__name__)
 
 class EmailProcessor:
     def __init__(self, service):
         self.service = service
+        self.text_maker = html2text.HTML2Text()
+        self._configure_html2text()
+
+    def _configure_html2text(self):
+        """Configure HTML2Text settings for optimal conversion"""
+        self.text_maker.ignore_links = True
+        self.text_maker.ignore_images = True
+        self.text_maker.ignore_emphasis = False
+        self.text_maker.ignore_tables = True
+        self.text_maker.body_width = 0
+        self.text_maker.skip_internal_links = True
+        self.text_maker.inline_links = False
+        self.text_maker.protect_links = False
+        self.text_maker.references = False
 
     def get_message_content(self, payload: Dict) -> str:
         if 'parts' in payload:
@@ -23,6 +38,71 @@ class EmailProcessor:
             text = urlsafe_b64decode(data).decode('utf-8')
             return text
         return ''
+    
+    def _process_email(self, message_id: str) -> Optional[Dict]:
+        msg = self.service.users().messages().get(
+            userId='me',
+            id=message_id
+            #format='full'
+        ).execute()
+
+        headers = msg['payload']['headers']
+        subject = next((header['value'] for header in headers if header['name'] == 'Subject'), '')
+        sender = next((header['value'] for header in headers if header['name'] == 'From'), '')
+        date_str = datetime.fromtimestamp(int(msg['internalDate'])/1000).strftime('%Y-%m-%d %H:%M:%S')
+
+        # subject = f"Date: {date_str} --- Subject: {subject} --- Labels: {msg['labelIds']}"
+
+        message_content = self.get_message_content(msg['payload'])
+        # print(f"{message_content[:200]}..." if len(message_content) > 200 else message_content)
+        # print(message_content)
+        # print('----------EOM--------------')
+        
+        if message_content:
+            text_content = self._save_email_content(message_content, subject)
+        else:
+            text_content = ""
+
+        return {
+            'id': message_id,
+            'sender': sender,
+            'subject': subject,
+            'date': date_str,
+            'snippet': msg['snippet'],
+            'content': text_content
+        }
+
+    def _save_email_content(self, content: str, subject: str) -> str:
+        """
+        Saves both HTML and text versions of email content and returns the text content
+        """
+        # Get the project root directory
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        timestamp_dir = datetime.now().strftime('%Y%m%d%H%M')
+        base_file_path = f"{project_root}/outputs/emails/{timestamp_dir}"
+
+        # Create emails directory and any parent directories
+        os.makedirs(base_file_path, exist_ok=True)
+        
+        # Create safe filename from subject
+        safe_subject = "".join(c for c in subject if c.isalnum() or c in (' ', '-', '_'))
+        
+        # Convert HTML to text
+        text_content = self.text_maker.handle(content)
+
+        # Save both HTML and text versions
+        html_path = os.path.join(base_file_path, f"{safe_subject}.html")
+        text_path = os.path.join(base_file_path, f"{safe_subject}.txt")
+        
+        # Save HTML content
+        with open(html_path, 'w', encoding='utf-8') as f:
+            f.write(content)
+        
+        # Save text content
+        with open(text_path, 'w', encoding='utf-8') as f:
+            f.write(text_content)
+
+        return text_content
 
     def get_unread_emails(self, args: any) -> List[Dict]:
         """Fetches details of unread emails."""
@@ -67,50 +147,3 @@ class EmailProcessor:
         
         return email_info
 
-    def _process_email(self, message_id: str) -> Optional[Dict]:
-        msg = self.service.users().messages().get(
-            userId='me',
-            id=message_id
-            #format='full'
-        ).execute()
-
-        headers = msg['payload']['headers']
-        subject = next((header['value'] for header in headers if header['name'] == 'Subject'), '')
-        sender = next((header['value'] for header in headers if header['name'] == 'From'), '')
-        date_str = datetime.fromtimestamp(int(msg['internalDate'])/1000).strftime('%Y-%m-%d %H:%M:%S')
-
-        # subject = f"Date: {date_str} --- Subject: {subject} --- Labels: {msg['labelIds']}"
-
-        message_content = self.get_message_content(msg['payload'])
-        # print(f"{message_content[:200]}..." if len(message_content) > 200 else message_content)
-        # print(message_content)
-        # print('----------EOM--------------')
-        
-        if message_content:
-            self._save_email_content(message_content, subject)
-
-        return {
-            'id': message_id,
-            'sender': sender,
-            'subject': subject,
-            'date': date_str,
-            'snippet': msg['snippet'],
-            'content': message_content
-        }
-
-    def _save_email_content(self, content: str, subject: str):
-
-        # Get the project root directory (assuming modules is directly under project root)
-        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        base_file_path = f"{project_root}/outputs/emails/{datetime.now().strftime('%Y%m%d%H%M')}"
-
-        # Create emails directory and any parent directories if they don't exist
-        os.makedirs(base_file_path, exist_ok=True)
-        
-        # Ensure subject is safe for file paths and create subdirectories if needed
-        safe_subject = "".join(c for c in subject if c.isalnum() or c in (' ', '-', '_'))
-        file_path = os.path.join(base_file_path, safe_subject + '.html')
-        
-        # Save HTML content to file
-        with open(file_path, 'w', encoding='utf-8') as f:
-            f.write(content)
