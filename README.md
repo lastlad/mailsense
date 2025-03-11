@@ -1,6 +1,6 @@
-# Gmail Auto Labeller
+# MailSense
 
-A Python application that automatically labels Gmail emails using Large Language Models (LLMs). The app analyzes email content and suggests/applies appropriate labels based on the email context and existing labels.
+A Python application that automatically organizes Gmail using Large Language Models (LLMs). The app analyzes email content and suggests/applies appropriate labels based on the email context and existing labels.
 
 ## Features
 
@@ -53,8 +53,8 @@ ollama pull deepseek-r1:7b
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/lastlad/gmail-auto-labeller.git
-cd gmail-auto-labeller
+git clone https://github.com/lastlad/mailsense.git
+cd mailsense
 ```
 
 2. Create and activate virtual environment:
