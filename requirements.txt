@@ -3,4 +3,8 @@ google-auth-httplib2
 google-api-python-client
 langchain
 langchain-openai
+langchain-aws
+langchain-ollama
 python-dotenv
+pydantic
+html2text
