@@ -215,8 +215,8 @@ class EmailClassifier:
         return classifications
 
 if __name__ == '__main__':
-    logger.info("Starting email classifier application")
-    parser = argparse.ArgumentParser(description='Gmail Email Classifier')
+    logger.info("Starting MailSense - email classifier application")
+    parser = argparse.ArgumentParser(description='MailSense - Email Classifier')
     
     # Core functionality arguments
     parser.add_argument(
