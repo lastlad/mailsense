@@ -72,30 +72,35 @@ class EmailProcessor:
 
     def get_unread_emails(self, args: any) -> List[Dict]:
         """Fetches details of unread emails."""
-
         filter_query = 'is:unread'
 
-        if args.start_date and args.end_date:
-            start_date = datetime.strptime(args.start_date, '%Y-%m-%d')
-            end_date = datetime.strptime(args.end_date, '%Y-%m-%d')
+        # Handle date filtering
+        if args.date_from and args.date_to:
+            start_date = datetime.strptime(args.date_from, '%Y-%m-%d')
+            end_date = datetime.strptime(args.date_to, '%Y-%m-%d')
             date_diff = end_date - start_date
             if date_diff.days < 30:
-                filter_query += f" after:{args.start_date} before: {args.end_date}"
+                filter_query += f" after:{args.date_from} before:{args.date_to}"
             else:
                 end_date = start_date + timedelta(days=30)
-                filter_query += f" after:{args.start_date} before: {args.end_date}"
+                filter_query += f" after:{args.date_from} before:{end_date.strftime('%Y-%m-%d')}"
+        elif args.date_range:
+            # Convert date range to days
+            days = int(args.date_range.rstrip('d'))
+            date_filter = (datetime.now() - timedelta(days=days)).strftime('%Y/%m/%d')
+            filter_query += f" after:{date_filter}"
         elif args.days_old:
-            # Calculate date from N days ago and format as YYYY/MM/DD
+            # Use days_old from config if no other date filters specified
             date_filter = (datetime.now() - timedelta(days=args.days_old)).strftime('%Y/%m/%d')
             filter_query += f" after:{date_filter}"
 
         logger.info(f"Filter Query used: {filter_query}")
         
-        # Get unread messages.
+        # Get unread messages
         results = self.service.users().messages().list(
             userId='me',
-            labelIds=['UNREAD', 'CATEGORY_UPDATES'], #'CATEGORY_PERSONAL'
-            q=filter_query, #'is:unread',
+            labelIds=['UNREAD', 'CATEGORY_UPDATES'],
+            q=filter_query,
             maxResults=args.max_emails
         ).execute()
         
@@ -103,7 +108,7 @@ class EmailProcessor:
         email_info = []
 
         if not messages:
-            print('No unread messages found.')
+            logger.info('No unread messages found.')
             return email_info
 
         for message in messages:

@@ -1,0 +1,29 @@
+# Default Processing Settings
+defaults:
+  max_emails: 15
+  days_old: 2
+  dry_run: true
+  skip_user_labels: false
+  create_labels: false
+  llm_provider: "openai"  # default provider
+  llm_model: "gpt-4o-mini"  # default model
+
+# LLM Models Configuration
+llm_providers:
+  openai:
+    models: 
+      - "gpt-4o-mini"
+      - "gpt-4o"
+  bedrock:
+    models:
+      - "claude-sonnet-35"
+      - "claude-haiku-35"
+  ollama:
+    models:
+      - "llama-33-70B"
+      - "deepseek-r1:7b"
+
+# Email Categories
+email_categories:
+  - CATEGORY_UPDATES
+  - CATEGORY_PERSONAL 
