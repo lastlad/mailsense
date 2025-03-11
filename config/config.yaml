@@ -5,6 +5,7 @@ defaults:
   dry_run: true
   skip_user_labels: false
   create_labels: false
+  use_full_content: false
   llm_provider: "openai"  # default provider
   llm_model: "gpt-4o-mini"  # default model
 

@@ -39,11 +39,10 @@ class EmailProcessor:
             return text
         return ''
     
-    def _process_email(self, message_id: str) -> Optional[Dict]:
+    def _process_email(self, message_id: str, use_full_content: bool = False) -> Optional[Dict]:
         msg = self.service.users().messages().get(
             userId='me',
             id=message_id
-            #format='full'
         ).execute()
 
         headers = msg['payload']['headers']
@@ -51,23 +50,21 @@ class EmailProcessor:
         sender = next((header['value'] for header in headers if header['name'] == 'From'), '')
         date_str = datetime.fromtimestamp(int(msg['internalDate'])/1000).strftime('%Y-%m-%d %H:%M:%S')
 
-        # subject = f"Date: {date_str} --- Subject: {subject} --- Labels: {msg['labelIds']}"
-
-        message_content = self.get_message_content(msg['payload'])
-        # print(f"{message_content[:200]}..." if len(message_content) > 200 else message_content)
-        # print(message_content)
-        # print('----------EOM--------------')
-        
-        # Sanitize the email content to remove HTML tags and other formatting
-        sanitized_message_content = self.text_maker.handle(message_content)
+        content = ""
+        if use_full_content:
+            # Only fetch and process full content if needed
+            message_content = self.get_message_content(msg['payload'])
+            content = self.text_maker.handle(message_content)
+        else:
+            # Use snippet if full content not needed
+            content = msg['snippet']
 
         return {
             'id': message_id,
             'sender': sender,
             'subject': subject,
             'date': date_str,
-            'snippet': msg['snippet'],
-            'content': sanitized_message_content
+            'content': content
         }
 
     def get_unread_emails(self, args: any) -> List[Dict]:
@@ -84,13 +81,7 @@ class EmailProcessor:
             else:
                 end_date = start_date + timedelta(days=30)
                 filter_query += f" after:{args.date_from} before:{end_date.strftime('%Y-%m-%d')}"
-        elif args.date_range:
-            # Convert date range to days
-            days = int(args.date_range.rstrip('d'))
-            date_filter = (datetime.now() - timedelta(days=days)).strftime('%Y/%m/%d')
-            filter_query += f" after:{date_filter}"
-        elif args.days_old:
-            # Use days_old from config if no other date filters specified
+        else: # Use days_old from config if no other date filters specified            
             date_filter = (datetime.now() - timedelta(days=args.days_old)).strftime('%Y/%m/%d')
             filter_query += f" after:{date_filter}"
 
@@ -112,7 +103,10 @@ class EmailProcessor:
             return email_info
 
         for message in messages:
-            email_data = self._process_email(message['id'])
+            email_data = self._process_email(
+                message['id'], 
+                use_full_content=args.use_full_content
+            )
             if email_data:
                 email_info.append(email_data)
         

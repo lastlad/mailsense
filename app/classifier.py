@@ -63,7 +63,8 @@ class EmailClassifier:
         boolean_flags = {
             'skip_user_labels': self.config.skip_user_labels,
             'create_labels': self.config.create_labels,
-            'dry_run': self.config.dry_run
+            'dry_run': self.config.dry_run,
+            'use_full_content': self.config.use_full_content
         }
         
         for flag, default in boolean_flags.items():
@@ -87,6 +88,21 @@ class EmailClassifier:
     def _setup_llm_processors(self):
         """Initialize and validate LLM processors"""
         provider = self.config.default_provider
+        
+        # If not using full content, we only need one LLM for classification
+        if not self.args.use_full_content:
+            model = self.args.classify_model or self.config.default_model
+            if not self.config.validate_model(provider, model):
+                raise ValueError(f"Invalid model {model} for provider {provider}")
+            
+            logger.info(f"Using provider: {provider}")
+            logger.info(f"Classification model: {model}")
+            
+            # Use same instance for both since summarization will be skipped
+            llm = LLMProcessor(provider=provider, model_name=model)
+            return llm, llm
+        
+        # If using full content, set up both processors if needed
         summary_model = self.args.summary_model or self.config.default_model
         classify_model = self.args.classify_model or self.config.default_model
 
@@ -150,16 +166,27 @@ class EmailClassifier:
                 print_to_console=self.args.print
             )
 
-        # Summarize emails
-        logger.info("Summarizing emails")
-        email_info = self.summary_llm.summarize_emails(self.args, email_info)
-        if self.args.save_steps:
-            self.output_writer.save_step_output(
-                email_info, 
-                'summaries',
-                print_to_console=self.args.print
-            )
-            
+        # Only summarize if using full content
+        if self.args.use_full_content:
+            logger.info("Summarizing emails")
+            email_info = self.summary_llm.summarize_emails(self.args, email_info)
+            if self.args.save_steps:
+                self.output_writer.save_step_output(
+                    email_info, 
+                    'summaries',
+                    print_to_console=self.args.print
+                )
+        else:
+            logger.info("Using email snippets directly for classification")
+            # Add summary structure using the snippet
+            for email in email_info:
+                email['summary'] = {
+                    'summary': email['content'],  # content is already the snippet
+                    'category_major': '',
+                    'category_minor': '',
+                    'category_reasoning': ''
+                }
+
         return email_info
 
     def _classify_emails(self, email_info):
@@ -201,12 +228,6 @@ if __name__ == '__main__':
     # Date filtering arguments
     date_group = parser.add_mutually_exclusive_group()
     date_group.add_argument(
-        '--date-range',
-        type=str,
-        choices=['1d', '3d', '7d', '14d', '30d'],
-        help='Process emails from last N days'
-    )
-    date_group.add_argument(
         '--days-old',
         type=int,
         help='Override default: Process emails from last N days'
@@ -220,6 +241,23 @@ if __name__ == '__main__':
         '--date-to',
         type=str,
         help='Process emails until this date (YYYY-MM-DD). Use with --date-from'
+    )
+
+    # Email content control
+    parser.add_argument(
+        '--use-full-content',
+        action='store_true',
+        help='Use full email content instead of just snippet for classification (may increase API costs)'
+    )
+
+    # LLM Selection (optional overrides)
+    parser.add_argument(
+        '--summary-model',
+        help='Override: Specific model to use for summarization'
+    )
+    parser.add_argument(
+        '--classify-model',
+        help='Override: Specific model to use for classification'
     )
 
     # Label handling arguments
@@ -237,16 +275,6 @@ if __name__ == '__main__':
         '--dry-run',
         action='store_true',
         help='Run without applying labels'
-    )
-
-    # LLM Selection (optional overrides)
-    parser.add_argument(
-        '--summary-model',
-        help='Override: Specific model to use for summarization'
-    )
-    parser.add_argument(
-        '--classify-model',
-        help='Override: Specific model to use for classification'
     )
 
     # Output control

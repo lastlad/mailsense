@@ -106,13 +106,13 @@ class LLMProcessor:
                     labels="\n".join(label_names),
                     email_from=email['sender'],
                     email_subject=email['subject'],
-                    email_content=email['summary'] #email['snippet'] #email['content']
+                    email_content=email['summary']
                 )
             else:
                 messages = prompt_without_labels.format_messages(
                     email_from=email['sender'],
                     email_subject=email['subject'],
-                    email_content=email['summary'] #email['snippet'] #email['content']
+                    email_content=email['summary']
                 )            
             
             response = self.llm.invoke(messages)

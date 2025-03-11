@@ -52,6 +52,11 @@ class Config:
     def create_labels(self) -> bool:
         """Get default create labels setting"""
         return self.config['defaults']['create_labels']
+
+    @property
+    def use_full_content(self) -> bool:
+        """Get setting for using full email content vs snippet"""
+        return self.config['defaults']['use_full_content']
         
     def get_provider_models(self, provider: str) -> List[str]:
         """Get list of models available for a provider"""
