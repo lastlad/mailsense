@@ -2,8 +2,8 @@ import os
 import sys
 import logging
 import argparse
-from datetime import datetime
 from dotenv import load_dotenv
+from datetime import datetime
 load_dotenv()
 
 # Configure logging
@@ -26,137 +26,267 @@ from modules.email import EmailProcessor
 from modules.label import GmailLabels
 from modules.llm import LLMProcessor
 from modules.output import OutputWriter
+from modules.config import Config
 
 class EmailClassifier:
     def __init__(self, args):
-        self.args = args
-        logger.info("Initializing EmailClassifier")
+        self.config = Config()
+        self.args = self._initialize_args(args)
+        
+        # Initialize services and processors
         self.service = GmailAuth.get_gmail_service()
+        self.output_writer = OutputWriter()
         self.labels_manager = GmailLabels(self.service)
         self.email_processor = EmailProcessor(self.service)
-        self.llm_processor = LLMProcessor(self.args)
-        self.output_writer = OutputWriter()
+        
+        # Initialize LLM processors
+        self.summary_llm, self.classify_llm = self._setup_llm_processors()
+        
+        logger.info("EmailClassifier initialized successfully")
+
+    def _initialize_args(self, args):
+        """Initialize and validate command line arguments with config defaults"""
+        # Set numeric defaults
+        args.max_emails = args.max_emails or self.config.max_emails
+        args.days_old = args.days_old or self.config.days_old
+        
+        # Set boolean defaults
+        self._set_boolean_defaults(args)
+        
+        # Validate date arguments
+        self._validate_date_args(args)
+        
+        return args
+
+    def _set_boolean_defaults(self, args):
+        """Set boolean flags from config if not explicitly set"""
+        boolean_flags = {
+            'skip_user_labels': self.config.skip_user_labels,
+            'create_labels': self.config.create_labels,
+            'dry_run': self.config.dry_run,
+            'use_full_content': self.config.use_full_content
+        }
+        
+        for flag, default in boolean_flags.items():
+            if not hasattr(args, flag):
+                setattr(args, flag, default)
+
+    def _validate_date_args(self, args):
+        """Validate date-related arguments"""
+        if args.date_from and not args.date_to:
+            raise ValueError("--date-to is required when using --date-from")
+        if args.date_to and not args.date_from:
+            raise ValueError("--date-from is required when using --date-to")
+        
+        if args.date_from and args.date_to:
+            try:
+                datetime.strptime(args.date_from, '%Y-%m-%d')
+                datetime.strptime(args.date_to, '%Y-%m-%d')
+            except ValueError:
+                raise ValueError("Dates must be in YYYY-MM-DD format")
+
+    def _setup_llm_processors(self):
+        """Initialize and validate LLM processors"""
+        provider = self.config.default_provider
+        
+        # If not using full content, we only need one LLM for classification
+        if not self.args.use_full_content:
+            model = self.args.classify_model or self.config.default_model
+            if not self.config.validate_model(provider, model):
+                raise ValueError(f"Invalid model {model} for provider {provider}")
+            
+            logger.info(f"Using provider: {provider}")
+            logger.info(f"Classification model: {model}")
+            
+            # Use same instance for both since summarization will be skipped
+            llm = LLMProcessor(provider=provider, model_name=model)
+            return llm, llm
+        
+        # If using full content, set up both processors if needed
+        summary_model = self.args.summary_model or self.config.default_model
+        classify_model = self.args.classify_model or self.config.default_model
+
+        # Validate models
+        for model in [summary_model, classify_model]:
+            if not self.config.validate_model(provider, model):
+                raise ValueError(f"Invalid model {model} for provider {provider}")
+        
+        logger.info(f"Using provider: {provider}")
+        logger.info(f"Summary model: {summary_model}")
+        logger.info(f"Classification model: {classify_model}")
+
+        # Initialize summary LLM
+        summary_llm = LLMProcessor(
+            provider=provider,
+            model_name=summary_model
+        )
+        
+        # Use same LLM instance if models are identical
+        if summary_model == classify_model:
+            logger.info("Using same LLM for classification and summarization")
+            classify_llm = summary_llm
+        else:
+            logger.info("Using separate LLM for classification")
+            classify_llm = LLMProcessor(
+                provider=provider,
+                model_name=classify_model
+            )
+            
+        return summary_llm, classify_llm
 
     def run(self):
-        logger.info("Starting email classification process")
+        """Main execution method"""
+        try:
+            logger.info("Starting email classification process")
+            
+            # Process and classify emails
+            email_info = self._process_emails()
+            classifications = self._classify_emails(email_info)
+            
+            # Apply labels if not in dry run mode
+            if not self.args.dry_run:
+                logger.info("Applying labels to emails")
+                self.labels_manager.update_labels(email_info, classifications)
+            else:
+                logger.info("Dry run.... Not Modifying the labels of email.")
 
-        # Process emails
+        except Exception as e:
+            logger.error(f"Error in run method: {str(e)}")
+            raise
+
+    def _process_emails(self):
+        """Process and summarize emails"""
+        # Fetch emails
         logger.info(f"Fetching up to {self.args.max_emails} unread emails")
         email_info = self.email_processor.get_unread_emails(self.args)
+        if self.args.save_steps:
+            self.output_writer.save_step_output(
+                email_info, 
+                'emails',
+                print_to_console=self.args.print
+            )
 
-        # Summarizing emails
-        logger.info("Summarizing emails")
-        email_info = self.llm_processor.summarize_emails(self.args, email_info)
+        # Only summarize if using full content
+        if self.args.use_full_content:
+            logger.info("Summarizing emails")
+            email_info = self.summary_llm.summarize_emails(self.args, email_info)
+            if self.args.save_steps:
+                self.output_writer.save_step_output(
+                    email_info, 
+                    'summaries',
+                    print_to_console=self.args.print
+                )
+        else:
+            logger.info("Using email snippets directly for classification")
+            # Add summary structure using the snippet
+            for email in email_info:
+                email['summary'] = {
+                    'summary': email['content'],  # content is already the snippet
+                    'category_major': '',
+                    'category_minor': '',
+                    'category_reasoning': ''
+                }
 
-        logger.info("Classifying emails")
+        return email_info
 
+    def _classify_emails(self, email_info):
+        """Classify emails using LLM"""
         # Get labels if needed
         all_labels = []
         if not self.args.skip_user_labels:
             logger.info("Fetching user labels")
             all_labels = self.labels_manager.list_user_labels()
 
-        classifications = self.llm_processor.classify_emails(self.args, email_info, all_labels)
-
-        # Apply labels if not in dry run mode
-        if not self.args.dry_run:
-            logger.info("Applying labels to emails")
-            self.labels_manager.update_labels(email_info, classifications)
-        else:
-            logger.info("Dry run.... Not Modifying the labels of email.")
-
-        # Save results
-        output_file = self.output_writer.write_results(
+        # Classify emails
+        logger.info("Classifying emails")
+        classifications = self.classify_llm.classify_emails(
+            self.args, 
             email_info, 
+            all_labels
+        )
+        
+        # Always save final classifications
+        self.output_writer.save_step_output(
             classifications, 
+            'classifications',
             print_to_console=self.args.print
         )
-        logger.info(f"Process completed. Results saved to {output_file}")
+        
+        return classifications
 
 if __name__ == '__main__':
-    logger.info("Starting email classifier application")
-    # Set up argument parser
-    parser = argparse.ArgumentParser(description='email classifier')
-    parser.add_argument(
-        '--provider', 
-        default='openai',
-        required=False,
-        choices=['openai','bedrock','ollama','anthropic','huggingface'],
-        help='LLM provider to use.'
-    )
-    parser.add_argument(
-        '--model-name', 
-        default='gpt-4o-mini',
-        required=False,
-        choices=['gpt-4o-mini','gpt-4o','claude-sonnet-35','claude-haiku-35','llama-33-70B', 'deepseek-r1:7b'],
-        help='LLM Model to use.'
-    )
-    parser.add_argument(
-        '--llm-api-keys',
-        type=str,
-        required=False,
-        help='API Keys for the LLM provider of choice. Loads from .env if not provided.'
-    )
-    # parser.add_argument(
-    #     '--only-unread', 
-    #     type=bool, 
-    #     default=True,
-    #     help='Label on the unread emails. *** Be cautious as labelling all emails will be expensive.'
-    # )
-    #TODO: Refactor to use `action` instead of type.
-    parser.add_argument(
-        '--skip-user-labels',
-        type=bool,
-        default=False,
-        help='Skip using existing user defined labels to classify emails. By default, user labels will be used.'
-    )
-    parser.add_argument(
-        '--create-labels', 
-        type=bool, 
-        default=False,
-        help='Create new labels on the fly using LLM. If not, will look for a correct fit from the available labels.'
-    )
-    parser.add_argument(
-        '--dry-run', 
-        type=bool, 
-        default=True,
-        help='Dry run. Will not update the labels of the emails.'
-    )
+    logger.info("Starting MailSense - email classifier application")
+    parser = argparse.ArgumentParser(description='MailSense - Email Classifier')
+    
+    # Core functionality arguments
     parser.add_argument(
         '--max-emails', 
-        type=int, 
-        default=15,
-        required=False,
-        help='Maximum number of unread emails to process (default: 25)'
+        type=int,
+        help='Override default: Maximum number of emails to process'
     )
-    parser.add_argument(
-        '--days-old', 
-        type=int, 
-        default=2,
-        required=False,
-        help='Maximum number of look back days for fetching the emails. (E.g: Last 7 days.)'
+
+    # Date filtering arguments
+    date_group = parser.add_mutually_exclusive_group()
+    date_group.add_argument(
+        '--days-old',
+        type=int,
+        help='Override default: Process emails from last N days'
     )
-    parser.add_argument(
-        '--start-date', 
-        type=str, 
-        required=False,
-        help='Start Date for the email fetch in YYYY-MM-DD format.'
+    date_group.add_argument(
+        '--date-from',
+        type=str,
+        help='Process emails from this date (YYYY-MM-DD). Use with --date-to'
     )
-    parser.add_argument(
-        '--end-date', 
-        type=str, 
-        required=False,
-        help='End Date for the email fetch in YYYY-MM-DD format.'
+    date_group.add_argument(
+        '--date-to',
+        type=str,
+        help='Process emails until this date (YYYY-MM-DD). Use with --date-from'
     )
+
+    # Email content control
     parser.add_argument(
-        '--use-email-content', 
-        action='store_false', 
-        help='If set, will also uses the contents of the email to get additional context about the email. WARNING: Will result in additional LLM Token costs.'
-    )
-    parser.add_argument(
-        '--print', 
+        '--use-full-content',
         action='store_true',
-        help='Print results to console in addition to saving to file'
+        help='Use full email content instead of just snippet for classification (may increase API costs)'
+    )
+
+    # LLM Selection (optional overrides)
+    parser.add_argument(
+        '--summary-model',
+        help='Override: Specific model to use for summarization'
+    )
+    parser.add_argument(
+        '--classify-model',
+        help='Override: Specific model to use for classification'
+    )
+
+    # Label handling arguments
+    parser.add_argument(
+        '--skip-user-labels',
+        action='store_true',
+        help='Skip using existing user labels for classification'
+    )
+    parser.add_argument(
+        '--create-labels',
+        action='store_true',
+        help='Allow creation of new labels'
+    )
+    parser.add_argument(
+        '--dry-run',
+        action='store_true',
+        help='Run without applying labels'
+    )
+
+    # Output control
+    parser.add_argument(
+        '--save-steps',
+        action='store_true',
+        help='Save intermediate outputs'
+    )
+    parser.add_argument(
+        '--print',
+        action='store_true',
+        help='Print results to console'
     )
 
     args = parser.parse_args()

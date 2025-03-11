@@ -11,31 +11,33 @@ from modules.model import EmailSummary
 from modules.prompts import summarize_template, classify_template, classify_template_no_labels
 
 class LLMProcessor:
-    def __init__(self, args: any):
-       
+    def __init__(self, provider: str, model_name: str):
+        """Initialize LLM processor with specific provider and model"""
+        
         # Initialize the appropriate LLM based on the provider
-        if args.provider == "openai":
-            self.llm = ChatOpenAI(temperature=0.1, model=args.model_name)
-        elif args.provider == "bedrock":
+        if provider == "openai":
+            self.llm = ChatOpenAI(
+                temperature=0.1, 
+                model=model_name
+            )
+        elif provider == "bedrock":
             # Configure AWS Bedrock client
             config = Config(
-                region_name='us-east-2',  # e.g. "us-east-1"
+                region_name='us-east-2',
                 retries={
                     'max_attempts': 3,
                     'mode': 'standard'
                 }
             )
             
-            # Initialize Bedrock client with credentials
             bedrock_client = boto3.client(
                 service_name='bedrock-runtime',
                 region_name='us-east-2',
                 config=config
             )
 
-            # Initialize Bedrock Chat model
             self.llm = ChatBedrock(
-                model_id= "us.amazon.nova-pro-v1:0", #"us.anthropic.claude-3-5-sonnet-20241022-v2:0", #args.model_name,  # e.g. "anthropic.claude-v2"
+                model_id=model_name,
                 client=bedrock_client,
                 model_kwargs={
                     "temperature": 0.1,
@@ -43,13 +45,13 @@ class LLMProcessor:
                     "top_p": 0.1
                 }
             )
-        elif args.provider == "ollama":
+        elif provider == "ollama":
             self.llm = ChatOllama(
-                model=args.model_name,
+                model=model_name,
                 temperature=0.1
             )
         else:
-            raise ValueError(f"Unsupported LLM provider: {args.provider}")
+            raise ValueError(f"Unsupported LLM provider: {provider}")
 
         self.parser = PydanticOutputParser(pydantic_object=EmailSummary)
 
@@ -104,13 +106,13 @@ class LLMProcessor:
                     labels="\n".join(label_names),
                     email_from=email['sender'],
                     email_subject=email['subject'],
-                    email_content=email['summary'] #email['snippet'] #email['content']
+                    email_content=email['summary']
                 )
             else:
                 messages = prompt_without_labels.format_messages(
                     email_from=email['sender'],
                     email_subject=email['subject'],
-                    email_content=email['summary'] #email['snippet'] #email['content']
+                    email_content=email['summary']
                 )            
             
             response = self.llm.invoke(messages)
