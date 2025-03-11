@@ -47,6 +47,11 @@ class Config:
     def skip_user_labels(self) -> bool:
         """Get default skip user labels setting"""
         return self.config['defaults']['skip_user_labels']
+
+    @property
+    def create_labels(self) -> bool:
+        """Get default create labels setting"""
+        return self.config['defaults']['create_labels']
         
     def get_provider_models(self, provider: str) -> List[str]:
         """Get list of models available for a provider"""
