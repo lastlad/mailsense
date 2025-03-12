@@ -3,8 +3,7 @@ defaults:
   max_emails: 15
   days_old: 2
   dry_run: true
-  skip_user_labels: false
-  create_labels: false
+  use_user_labels: false
   use_full_content: false
   llm_provider: "openai"  # default provider
   llm_model: "gpt-4o-mini"  # default model
@@ -24,7 +23,12 @@ llm_providers:
       - "llama-33-70B"
       - "deepseek-r1:7b"
 
-# Email Categories
-email_categories:
-  - CATEGORY_UPDATES
-  - CATEGORY_PERSONAL 
+# Email Labels
+email_labels:
+  - 00-Financials
+  - 01-Personal
+  - 02-Utilities
+  - 04-Wellness
+  - 05-Shopping
+  - 06-Work
+  - 99-Misc

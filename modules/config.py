@@ -1,7 +1,7 @@
 import os
 import yaml
 from pathlib import Path
-from typing import Dict, Any, List
+from typing import List
 from dotenv import load_dotenv
 
 class Config:
@@ -44,14 +44,9 @@ class Config:
         return self.config['defaults']['dry_run']
 
     @property
-    def skip_user_labels(self) -> bool:
-        """Get default skip user labels setting"""
-        return self.config['defaults']['skip_user_labels']
-
-    @property
-    def create_labels(self) -> bool:
-        """Get default create labels setting"""
-        return self.config['defaults']['create_labels']
+    def use_user_labels(self) -> bool:
+        """Get default use user labels setting"""
+        return self.config['defaults']['use_user_labels']
 
     @property
     def use_full_content(self) -> bool:
@@ -73,6 +68,6 @@ class Config:
             return False
 
     @property
-    def email_categories(self) -> List[str]:
-        """Get list of email categories to process"""
-        return self.config['email_categories'] 
+    def email_labels(self) -> List[str]:
+        """Get list of email labels to process"""
+        return self.config['email_labels'] 

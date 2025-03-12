@@ -7,7 +7,7 @@ A Python application that automatically organizes Gmail using Large Language Mod
 - Automatically classify and label unread emails
 - Support for multiple LLM providers (OpenAI, AWS Bedrock, Ollama)
 - Use email snippets or full content for classification
-- Work with existing Gmail labels or create new ones
+- Work with predefined labels or Gmail account labels
 - Dry run mode for testing
 - Detailed logging and output saving
 - Configurable email processing limits and date ranges
@@ -25,31 +25,7 @@ A Python application that automatically organizes Gmail using Large Language Mod
    - Download the client configuration file
    - Rename it to `credentials.json` and place it in the project root
 
-### 2. LLM Provider Setup
-
-The application supports three LLM providers. Configure one or more based on your needs:
-
-#### OpenAI
-1. Get your API key from [OpenAI Platform](https://platform.openai.com/)
-2. Add to `.env`:
-OPENAI_API_KEY=<your_openai_api_key>
-
-#### AWS Bedrock
-1. Configure AWS credentials with Bedrock access
-2. Add to `.env`:
-AWS_ACCESS_KEY_ID=your_access_key
-AWS_SECRET_ACCESS_KEY=your_secret_key
-AWS_DEFAULT_REGION=us-east-2  # or your preferred region
-
-#### Ollama
-1. Install Ollama locally from [Ollama.ai](https://ollama.ai)
-2. Pull your desired models:
-```bash
-ollama pull llama-33-70B
-ollama pull deepseek-r1:7b
-```
-
-### 3. Installation
+### 2. Installation
 
 1. Clone the repository:
 ```bash
@@ -66,6 +42,34 @@ source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 3. Install dependencies:
 ```bash
 pip install -r requirements.txt
+```
+
+### 3. LLM Provider Setup
+
+The application supports three LLM providers. Configure one or more based on your needs:
+
+#### OpenAI
+1. Get your API key from [OpenAI Platform](https://platform.openai.com/)
+2. Add to `.env`:
+```
+OPENAI_API_KEY=<your_openai_api_key>
+```
+
+#### AWS Bedrock
+1. Configure AWS credentials with Bedrock access
+2. Add to `.env`:
+```
+AWS_ACCESS_KEY_ID=your_access_key
+AWS_SECRET_ACCESS_KEY=your_secret_key
+AWS_DEFAULT_REGION=us-east-2  # or your preferred region
+```
+
+#### Ollama
+1. Install Ollama locally from [ollama.ai](https://ollama.ai)
+2. Pull your desired models:
+```bash
+ollama pull llama-33-70B
+ollama pull deepseek-r1:7b
 ```
 
 ## Usage
@@ -95,17 +99,32 @@ python app/classifier.py [options]
 - `--classify-model MODEL`: Specific model for classification
 
 #### Label Management:
-- `--skip-user-labels`: Skip using existing user labels
-- `--create-labels`: Allow creation of new labels
+- `--use-user-labels`: Use Gmail account labels instead of predefined labels
+
+By default, the application uses predefined labels from the config file. These labels are:
+- 00-Financials
+- 01-Personal
+- 02-Utilities
+- 04-Wellness
+- 05-Shopping
+- 06-Work
+- 99-Misc
+
+To use your Gmail account's existing labels instead, add the `--use-user-labels` flag.
 
 ### Examples
 
-1. Basic run with defaults:
+1. Quick run. Process 10 emails and dry run using predefined labels:
+```bash
+python app/classifier.py --max-emails 10 --dry-run
+```
+
+2. Basic run with defaults (using predefined labels):
 ```bash
 python app/classifier.py
 ```
 
-2. Process last 5 days of emails with full content:
+3. Process last 5 days of emails with full content:
 ```bash
 python app/classifier.py --days-old 5 --use-full-content
 ```
@@ -115,9 +134,9 @@ python app/classifier.py --days-old 5 --use-full-content
 python app/classifier.py --date-from 2024-01-01 --date-to 2024-01-31
 ```
 
-4. Process 50 emails and create new labels:
+4. Process 50 emails and use Gmail account labels:
 ```bash
-python app/classifier.py --max-emails 50 --create-labels
+python app/classifier.py --max-emails 50 --use-user-labels
 ```
 
 5. Test run with output:
@@ -132,7 +151,7 @@ The application's default behavior can be customized in `config/config.yaml`:
 - Default processing settings
 - LLM provider configurations
 - Available models for each provider
-- Email categories
+- Predefined email labels
 
 ## Output
 
