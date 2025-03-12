@@ -36,7 +36,7 @@ class EmailClassifier:
         # Initialize services and processors
         self.service = GmailAuth.get_gmail_service()
         self.output_writer = OutputWriter()
-        self.labels_manager = GmailLabels(self.service)
+        self.labels_manager = GmailLabels(self.service, self.config)
         self.email_processor = EmailProcessor(self.service)
         
         # Initialize LLM processors
@@ -61,8 +61,7 @@ class EmailClassifier:
     def _set_boolean_defaults(self, args):
         """Set boolean flags from config if not explicitly set"""
         boolean_flags = {
-            'skip_user_labels': self.config.skip_user_labels,
-            'create_labels': self.config.create_labels,
+            'use_user_labels': self.config.use_user_labels,
             'dry_run': self.config.dry_run,
             'use_full_content': self.config.use_full_content
         }
@@ -144,11 +143,11 @@ class EmailClassifier:
             classifications = self._classify_emails(email_info)
             
             # Apply labels if not in dry run mode
-            if not self.args.dry_run:
+            if self.args.dry_run:
+                logger.info("Dry run.... Not Modifying the labels of email.")
+            else:
                 logger.info("Applying labels to emails")
                 self.labels_manager.update_labels(email_info, classifications)
-            else:
-                logger.info("Dry run.... Not Modifying the labels of email.")
 
         except Exception as e:
             logger.error(f"Error in run method: {str(e)}")
@@ -193,9 +192,8 @@ class EmailClassifier:
         """Classify emails using LLM"""
         # Get labels if needed
         all_labels = []
-        if not self.args.skip_user_labels:
-            logger.info("Fetching user labels")
-            all_labels = self.labels_manager.list_user_labels()
+        logger.info("Fetching labels")
+        all_labels = self.labels_manager.fetch_labels(self.args.use_user_labels)
 
         # Classify emails
         logger.info("Classifying emails")
@@ -262,14 +260,9 @@ if __name__ == '__main__':
 
     # Label handling arguments
     parser.add_argument(
-        '--skip-user-labels',
+        '--use-user-labels',
         action='store_true',
-        help='Skip using existing user labels for classification'
-    )
-    parser.add_argument(
-        '--create-labels',
-        action='store_true',
-        help='Allow creation of new labels'
+        help='Use Gmail account labels instead of predefined labels from config'
     )
     parser.add_argument(
         '--dry-run',

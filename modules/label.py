@@ -4,27 +4,28 @@ import logging
 logger = logging.getLogger(__name__)
 
 class GmailLabels:
-    def __init__(self, service):
+    def __init__(self, service, config):
         self.service = service
+        self.config = config
 
-    def list_user_labels(self) -> List[Dict]:
-        """Fetches all user-defined labels in the Gmail account."""
+    def fetch_labels(self, use_user_labels) -> List[Dict]:
+        """Fetches all labels from the Gmail account. If use_user_labels is True, it will fetch user defined labels from the Gmail account."""
         try:
-            results = self.service.users().labels().list(userId='me').execute()
-            labels = results.get('labels', [])
+            if not use_user_labels and self.config:
+                # Use predefined labels from config
+                return [{'name': label, 'type': 'user'} for label in self.config.email_labels]
+            else:
+                results = self.service.users().labels().list(userId='me').execute()
+                labels = results.get('labels', [])
 
-            if not labels:
-                print('No labels found.')
-                return []
+                if not labels:
+                    print('No labels found.')
+                    return []
 
-            # print('Labels:')
-            # for label in labels:
-            #     print(f"Name: {label['name']:<30} ID: {label['id']}, Type: {label['type']}")
-            
-            # Return only user defined labels are we don't want to categorize them into gmail predefined labels.
-            return [label for label in labels if label['type'] == 'user']
+                # Return only user defined labels are we don't want to categorize them into gmail predefined labels.
+                return [label for label in labels if label['type'] == 'user']
         except Exception as e:
-            print(f'An error occurred: {e}')
+            print(f'An error occurred while fetching labels: {e}')
             return []
         
     def update_labels(self, email_info, classifications):
@@ -42,7 +43,7 @@ class GmailLabels:
         """Applies a label to an email. Creates the label if it doesn't exist."""
         try:            
             # Get all labels to find or create the desired label
-            labels = self.list_user_labels()
+            labels = self.fetch_labels()
             label_id = None
 
             # Look for existing label
