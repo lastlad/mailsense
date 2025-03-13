@@ -28,29 +28,32 @@ class GmailLabels:
             print(f'An error occurred while fetching labels: {e}')
             return []
         
-    def update_labels(self, email_info, classifications):
+    def update_labels(self, email_info, classifications, use_user_labels):
         """Apply the classified labels to the emails"""
         for email_data, (subject, label) in zip(email_info, classifications):
             if label:
                 message_id = email_data['id']
-                success = self._update_label(message_id, label)
+                success = self._update_label(message_id, label, use_user_labels)
                 if success:
                     logger.info(f"Applied label '{label}' to email: {subject}")
                 else:
                     logger.error(f"Failed to apply label '{label}' to email: {subject}")        
 
-    def _update_label(self, message_id: str, label_name: str) -> bool:
+    def _update_label(self, message_id: str, label_name: str, use_user_labels: bool) -> bool:
         """Applies a label to an email. Creates the label if it doesn't exist."""
         try:            
-            # Get all labels to find or create the desired label
-            labels = self.fetch_labels()
             label_id = None
 
-            # Look for existing label
-            for label in labels:
-                if label['name'].lower() == label_name.lower():
-                    label_id = label['id']
-                    break
+            # If we are using user labels, we need to fetch the label_id from the user defined labels
+            if use_user_labels:
+                # Get all labels to find or create the desired label
+                labels = self.fetch_labels(use_user_labels)
+
+                # Look for existing label
+                for label in labels:
+                    if label['name'].lower() == label_name.lower():
+                        label_id = label['id']
+                        break
 
             # Create new label if it doesn't exist
             if not label_id:

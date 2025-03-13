@@ -8,3 +8,4 @@ langchain-ollama
 python-dotenv
 pydantic
 html2text
+flask==3.0.2
