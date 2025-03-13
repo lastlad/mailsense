@@ -8,55 +8,69 @@ class GmailLabels:
         self.service = service
         self.config = config
 
-    def fetch_labels(self, use_user_labels) -> List[Dict]:
-        """Fetches all labels from the Gmail account. If use_user_labels is True, it will fetch user defined labels from the Gmail account."""
+    def fetch_labels(self) -> List[Dict]:
+        """
+        Fetches labels from Gmail. First tries to get user-defined labels,
+        falls back to config labels if no user labels exist.
+        """
         try:
-            if not use_user_labels and self.config:
-                # Use predefined labels from config
+            # Always try to get user labels first
+            results = self.service.users().labels().list(userId='me').execute()
+            user_labels = [
+                label for label in results.get('labels', [])
+                if label['type'] == 'user'
+            ]
+
+            if user_labels:
+                logger.info(f"Found {len(user_labels)} user-defined labels")
+                return user_labels
+            
+            # If no user labels found, fall back to config labels
+            if self.config and hasattr(self.config, 'email_labels'):
+                logger.info("No user labels found, using default labels from config")
                 return [{'name': label, 'type': 'user'} for label in self.config.email_labels]
-            else:
-                results = self.service.users().labels().list(userId='me').execute()
-                labels = results.get('labels', [])
+            
+            # If no labels found anywhere
+            logger.warning("No labels found in Gmail or config")
+            return []
 
-                if not labels:
-                    print('No labels found.')
-                    return []
-
-                # Return only user defined labels are we don't want to categorize them into gmail predefined labels.
-                return [label for label in labels if label['type'] == 'user']
         except Exception as e:
-            print(f'An error occurred while fetching labels: {e}')
+            logger.error(f"Error fetching labels: {str(e)}")
             return []
         
-    def update_labels(self, email_info, classifications, use_user_labels):
+    def update_labels(self, email_info, classifications):
         """Apply the classified labels to the emails"""
+        # Get all labels from Gmail
+        available_labels = self.fetch_labels()
+
         for email_data, (subject, label) in zip(email_info, classifications):
             if label:
+                if label == 'NONE':
+                    logger.info(f"Skipping email: {subject} as label is NONE")
+                    continue
                 message_id = email_data['id']
-                success = self._update_label(message_id, label, use_user_labels)
+                success = self._update_label(message_id, label, available_labels)
                 if success:
                     logger.info(f"Applied label '{label}' to email: {subject}")
                 else:
                     logger.error(f"Failed to apply label '{label}' to email: {subject}")        
 
-    def _update_label(self, message_id: str, label_name: str, use_user_labels: bool) -> bool:
+    def _update_label(self, message_id: str, label_name: str, available_labels: List[Dict]) -> bool:
         """Applies a label to an email. Creates the label if it doesn't exist."""
         try:            
+            # Get all labels to find or create the desired label
+            labels = available_labels
             label_id = None
 
-            # If we are using user labels, we need to fetch the label_id from the user defined labels
-            if use_user_labels:
-                # Get all labels to find or create the desired label
-                labels = self.fetch_labels(use_user_labels)
-
-                # Look for existing label
-                for label in labels:
-                    if label['name'].lower() == label_name.lower():
-                        label_id = label['id']
-                        break
+            # Look for existing label
+            for label in labels:
+                if label['name'].lower() == label_name.lower() and label['id'] is not None:
+                    label_id = label['id']
+                    break
 
             # Create new label if it doesn't exist
             if not label_id:
+                logger.info(f"Creating new label: {label_name}")
                 label_object = {
                     'name': label_name,
                     'labelListVisibility': 'labelShow',
@@ -76,5 +90,5 @@ class GmailLabels:
             ).execute()
             return True
         except Exception as e:
-            print(f'Error applying label: {e}')
+            logger.error(f'Error applying label: {e}')
             return False

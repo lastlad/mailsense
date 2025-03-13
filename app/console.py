@@ -61,11 +61,6 @@ def create_arg_parser():
 
     # Label handling arguments
     parser.add_argument(
-        '--use-user-labels',
-        action='store_true',
-        help='Use Gmail account labels instead of predefined labels'
-    )
-    parser.add_argument(
         '--dry-run',
         action='store_true',
         help='Run without applying labels'

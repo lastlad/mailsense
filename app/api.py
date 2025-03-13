@@ -18,28 +18,29 @@ app = Flask(__name__)
 
 class APIArgs:
     """Simple class to mimic argparse.Namespace"""
-    def __init__(self, data: Dict[str, Any]):
+    def __init__(self, data: Dict[str, Any] = None):
+        data = data or {}  # Use empty dict if no data provided
+        
+        # Just pass through the values, let EmailClassifier handle defaults
         self.max_emails = data.get('max_emails')
         self.days_old = data.get('days_old')
         self.date_from = data.get('date_from')
         self.date_to = data.get('date_to')
-        self.use_full_content = data.get('use_full_content', False)
+        self.use_full_content = data.get('use_full_content')
         self.summary_model = data.get('summary_model')
         self.classify_model = data.get('classify_model')
-        self.use_user_labels = data.get('use_user_labels', False)
-        self.dry_run = data.get('dry_run', True)
-        self.save_steps = data.get('save_steps', False)
-        self.print = data.get('print', False)
+        self.dry_run = data.get('dry_run')
+        self.save_steps = data.get('save_steps')
+        self.print = data.get('print')
 
 @app.route('/api/classify', methods=['POST'])
 def classify_emails():
     """API endpoint to classify emails"""
     try:
-        request_data = request.get_json()
-        if not request_data:
-            return jsonify({'error': 'No data provided'}), 400
-
-        # Convert request data to args object
+        # Get request data if any, otherwise use None to trigger defaults
+        request_data = request.get_json() if request.is_json else None
+        
+        # Initialize args with provided data (or None)
         args = APIArgs(request_data)
         
         # Initialize and run classifier

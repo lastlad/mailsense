@@ -44,11 +44,6 @@ class Config:
         return self.config['defaults']['dry_run']
 
     @property
-    def use_user_labels(self) -> bool:
-        """Get default use user labels setting"""
-        return self.config['defaults']['use_user_labels']
-
-    @property
     def use_full_content(self) -> bool:
         """Get setting for using full email content vs snippet"""
         return self.config['defaults']['use_full_content']

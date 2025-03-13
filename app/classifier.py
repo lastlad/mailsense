@@ -60,7 +60,6 @@ class EmailClassifier:
     def _set_boolean_defaults(self, args):
         """Set boolean flags from config if not explicitly set"""
         boolean_flags = {
-            'use_user_labels': self.config.use_user_labels,
             'dry_run': self.config.dry_run,
             'use_full_content': self.config.use_full_content
         }
@@ -146,7 +145,7 @@ class EmailClassifier:
                 logger.info("Dry run.... Not Modifying the labels of email.")
             else:
                 logger.info("Applying labels to emails")
-                self.labels_manager.update_labels(email_info, classifications, self.args.use_user_labels) #TODO: Clean this up
+                self.labels_manager.update_labels(email_info, classifications)
 
         except Exception as e:
             logger.error(f"Error in run method: {str(e)}")
@@ -189,10 +188,9 @@ class EmailClassifier:
 
     def _classify_emails(self, email_info):
         """Classify emails using LLM"""
-        # Get labels if needed
-        all_labels = []
+        # Get labels
         logger.info("Fetching labels")
-        all_labels = self.labels_manager.fetch_labels(self.args.use_user_labels)
+        all_labels = self.labels_manager.fetch_labels()
 
         # Classify emails
         logger.info("Classifying emails")
