@@ -1,9 +1,8 @@
 # Default Processing Settings
 defaults:
-  max_emails: 15
+  max_emails: 2
   days_old: 2
   dry_run: true
-  use_user_labels: false
   use_full_content: false
   llm_provider: "openai"  # default provider
   llm_model: "gpt-4o-mini"  # default model
@@ -25,10 +24,10 @@ llm_providers:
 
 # Email Labels
 email_labels:
-  - 00-Financials
-  - 01-Personal
-  - 02-Utilities
-  - 04-Wellness
-  - 05-Shopping
-  - 06-Work
-  - 99-Misc
+  - Financials
+  - Personal
+  - Utilities
+  - Wellness
+  - Shopping
+  - Work
+  - Misc
