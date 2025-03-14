@@ -11,6 +11,9 @@ A Python application that automatically organizes Gmail using Large Language Mod
 - Dry run mode for testing
 - Detailed logging and output saving
 - Configurable email processing limits and date ranges
+- Multiple interfaces:
+  - Console application for command-line usage
+  - API server for integration with other applications
 
 ## Setup
 
@@ -74,74 +77,109 @@ ollama pull deepseek-r1:7b
 
 ## Usage
 
-The application can be run with various command-line arguments to customize its behavior:
+The application can be run in two modes: console interface or API server.
+
+### Console Interface
+
+Run the application from the command line:
 
 ```bash
-python app/classifier.py [options]
+python app/console.py [options]
 ```
 
-### Command Line Options
+#### Command Line Options
 
-#### Core Parameters:
+##### Core Parameters:
 - `--max-emails N`: Maximum number of emails to process (default: 15)
 - `--dry-run`: Run without applying labels (default: True)
 - `--print`: Print results to console
 - `--save-steps`: Save intermediate outputs
 
-#### Date Filtering:
+##### Date Filtering:
 - `--days-old N`: Process emails from last N days (default: 2)
 - `--date-from YYYY-MM-DD`: Process emails from this date
 - `--date-to YYYY-MM-DD`: Process emails until this date
 
-#### Content Processing:
+##### Content Processing:
 - `--use-full-content`: Use full email content instead of snippets
 - `--summary-model MODEL`: Specific model for summarization
 - `--classify-model MODEL`: Specific model for classification
 
-#### Label Management:
+##### Label Management:
 - `--use-user-labels`: Use Gmail account labels instead of predefined labels
 
 By default, the application uses predefined labels from the config file. These labels are:
-- 00-Financials
-- 01-Personal
-- 02-Utilities
-- 04-Wellness
-- 05-Shopping
-- 06-Work
-- 99-Misc
+- Financials
+- Personal
+- Utilities
+- Wellness
+- Shopping
+- Work
+- Misc
 
 To use your Gmail account's existing labels instead, add the `--use-user-labels` flag.
+
+### API Server
+
+Run the application as an API server:
+
+```bash
+python app/api.py
+```
+
+This starts a Flask server on port 50505 with the following endpoints:
+
+#### Endpoints
+
+- `GET /api/health`: Health check endpoint
+- `POST /api/classify`: Classify and label emails
+
+#### API Usage Example
+
+To classify emails via the API:
+
+```bash
+curl -X POST http://localhost:50505/api/classify \
+  -H "Content-Type: application/json" \
+  -d '{
+    "max_emails": 10,
+    "days_old": 2,
+    "use_full_content": false,
+    "use_user_labels": false,
+    "dry_run": true
+  }'
+```
 
 ### Examples
 
 1. Quick run. Process 10 emails and dry run using predefined labels:
 ```bash
-python app/classifier.py --max-emails 10 --dry-run
+python app/console.py --max-emails 10 --dry-run
 ```
 
 2. Basic run with defaults (using predefined labels):
 ```bash
-python app/classifier.py
+python app/console.py
 ```
 
 3. Process last 5 days of emails with full content:
 ```bash
-python app/classifier.py --days-old 5 --use-full-content
+python app/console.py --days-old 5 --use-full-content
 ```
 
-3. Process emails between specific dates:
+4. Process emails between specific dates:
 ```bash
-python app/classifier.py --date-from 2024-01-01 --date-to 2024-01-31
+python app/console.py --date-from 2024-01-01 --date-to 2024-01-31
 ```
 
-4. Process 50 emails and use Gmail account labels:
+5. Process 50 emails and use Gmail account labels:
 ```bash
-python app/classifier.py --max-emails 50 --use-user-labels
+python app/console.py --max-emails 50 --use-user-labels
 ```
 
-5. Test run with output:
+6. Test run with output:
 ```bash
-python app/classifier.py --dry-run --print --save-steps
+python app/console.py --dry-run --print --save-steps
 ```
 
 ## Configuration
@@ -169,7 +207,6 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
-
 --------------------------------
 
 ## TODO
