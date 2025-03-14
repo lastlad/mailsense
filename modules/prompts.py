@@ -59,16 +59,19 @@ email content:
 classify_template = """You are an email classifier. Given the following email information and available Gmail labels, 
 suggest the most appropriate label for each email based on the given email subject, email content and the sender of the email. Only suggest labels from the provided list.    
 
-Carefully read through the content of the email to understand the context of the email. Do not match to a label just because you see a related label. Let me explain with few examples:
+Carefully read through the content of the email to understand the context of the email. 
+
+Labels may have sub-categories. Sub-categories are represented by `/` in the label name. For example `Financials/Banks` or `Financials/Credit Cards` etc., In these cases think carefully about the possible sub-categories and suggest the most appropriate one. Let me explain with few examples:
 
 Example - 1:
-You may get see an email coming from discover.com domain. But the content may not be anything important or urgent and can be a promotional email. In this case the label should be `00 - Financials` and not `00 - Financials/Discover`
+You may get see an email coming from discover.com domain. But the content may not be anything important or urgent and can be a promotional email. In this case the label should be `Financials/Promotions` and not `Financials/Credit Cards`
 
 Example - 2:
-The email is received from linkedin.com domain. However content may not be anything important but rather just some updates from my linkedin connections. In this case the label should not not `99 - Misc/Jobs` but `99 - Misc`
+The email is received from linkedin.com domain. However content may not be anything important but rather just some updates from my linkedin connections. In this case the label should not not `Misc/Jobs` but `Misc`.
 
-Please respond with only the label name for this email. If no label fits, respond with "NONE". Do not include any commentary.
-Choose only from the given list of labels. Do not come up with new labels.
+If the given list of labels does not have a sub-category, then suggest an appropriate label from the list.
+
+Please respond with only the label name for this email. Do not include any commentary. Choose only from the given list of labels. Do not come up with new labels.
 
 Available Labels:
 {labels}
