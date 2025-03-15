@@ -47,13 +47,12 @@ class EmailClassifier:
         """Initialize and validate command line arguments with config defaults"""
         # Set numeric defaults
         args.max_emails = args.max_emails or self.config.max_emails
-        args.days_old = args.days_old or self.config.days_old
         
         # Set boolean defaults
         self._set_boolean_defaults(args)
         
         # Validate date arguments
-        self._validate_date_args(args)
+        self._validate_date_arguments(args)
         
         return args
 
@@ -68,19 +67,40 @@ class EmailClassifier:
             if not hasattr(args, flag):
                 setattr(args, flag, default)
 
-    def _validate_date_args(self, args):
-        """Validate date-related arguments"""
-        if args.date_from and not args.date_to:
-            raise ValueError("--date-to is required when using --date-from")
-        if args.date_to and not args.date_from:
-            raise ValueError("--date-from is required when using --date-to")
+    def _validate_date_arguments(self, args):
+        """Validate date-related arguments and set defaults based on priority:
+        1. If date_from and date_to are provided, use them
+        2. If days_old is provided, use it
+        3. Fall back to days_old from config
+        """
+        # Check if date parameters are provided
+        has_date_from = hasattr(args, 'date_from') and args.date_from is not None
+        has_date_to = hasattr(args, 'date_to') and args.date_to is not None
+        has_days_old = hasattr(args, 'days_old') and args.days_old is not None
         
-        if args.date_from and args.date_to:
-            try:
-                datetime.strptime(args.date_from, '%Y-%m-%d')
-                datetime.strptime(args.date_to, '%Y-%m-%d')
-            except ValueError:
-                raise ValueError("Dates must be in YYYY-MM-DD format")
+        # Validate that date_from and date_to are used together
+        if (has_date_from and not has_date_to) or (not has_date_from and has_date_to):
+            raise ValueError("Both --date-from and --date-to must be provided together")
+        
+        # Validate that days_old is not used with date_from/date_to
+        if has_days_old and (has_date_from or has_date_to):
+            raise ValueError("--days-old cannot be used with --date-from or --date-to")
+        
+        # Apply priority logic for date filtering
+        if has_date_from and has_date_to:
+            # Priority 1: Use date range if provided
+            logger.info(f"Using date range: {args.date_from} to {args.date_to}")
+            # If days_old exists as an attribute but wasn't explicitly set, set it to None
+            if hasattr(args, 'days_old'):
+                args.days_old = None
+        elif has_days_old:
+            # Priority 2: Use days_old if provided
+            logger.info(f"Using days_old: {args.days_old}")
+        else:
+            # Priority 3: Fall back to config default for days_old
+            if not hasattr(args, 'days_old') or args.days_old is None:
+                args.days_old = self.config.days_old
+                logger.info(f"Using default days_old from config: {args.days_old}")
 
     def _setup_llm_processors(self):
         """Initialize and validate LLM processors"""

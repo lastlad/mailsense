@@ -73,14 +73,7 @@ class EmailProcessor:
 
         # Handle date filtering
         if args.date_from and args.date_to:
-            start_date = datetime.strptime(args.date_from, '%Y-%m-%d')
-            end_date = datetime.strptime(args.date_to, '%Y-%m-%d')
-            date_diff = end_date - start_date
-            if date_diff.days < 30:
-                filter_query += f" after:{args.date_from} before:{args.date_to}"
-            else:
-                end_date = start_date + timedelta(days=30)
-                filter_query += f" after:{args.date_from} before:{end_date.strftime('%Y-%m-%d')}"
+            filter_query += f" after:{args.date_from} before:{args.date_to}"
         else: # Use days_old from config if no other date filters specified            
             date_filter = (datetime.now() - timedelta(days=args.days_old)).strftime('%Y/%m/%d')
             filter_query += f" after:{date_filter}"

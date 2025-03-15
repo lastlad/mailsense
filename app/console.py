@@ -25,21 +25,22 @@ def create_arg_parser():
     )
 
     # Date filtering arguments
-    date_group = parser.add_mutually_exclusive_group()
-    date_group.add_argument(
+    parser.add_argument(
         '--days-old',
         type=int,
         help='Override default: Process emails from last N days'
     )
-    date_group.add_argument(
+    
+    date_range_group = parser.add_argument_group('date range', 'Process emails between specific dates')
+    date_range_group.add_argument(
         '--date-from',
         type=str,
-        help='Process emails from this date (YYYY-MM-DD). Use with --date-to'
+        help='Process emails from this date (YYYY-MM-DD). Must be used with --date-to'
     )
-    date_group.add_argument(
+    date_range_group.add_argument(
         '--date-to',
         type=str,
-        help='Process emails until this date (YYYY-MM-DD). Use with --date-from'
+        help='Process emails until this date (YYYY-MM-DD). Must be used with --date-from'
     )
 
     # Email content control
@@ -86,8 +87,11 @@ def run_console():
     args = parser.parse_args()
     
     logger.info("Starting MailSense - email classifier application")
-    labeller = EmailClassifier(args)
-    labeller.run()
+    try:
+        labeller = EmailClassifier(args)
+        labeller.run()
+    except ValueError as e:
+        parser.error(str(e))
 
 if __name__ == '__main__':
     run_console() 

@@ -37,20 +37,28 @@ class APIArgs:
 def classify_emails():
     """API endpoint to classify emails"""
     try:
-        # Get request data if any, otherwise use None to trigger defaults
-        request_data = request.get_json() if request.is_json else None
-        
-        # Initialize args with provided data (or None)
+        request_data = request.get_json()
+        if not request_data:
+            return jsonify({'error': 'No data provided'}), 400
+
+        # Convert request data to args object
         args = APIArgs(request_data)
         
         # Initialize and run classifier
-        classifier = EmailClassifier(args)
-        classifier.run()
-        
-        return jsonify({
-            'status': 'success',
-            'message': 'Email classification completed successfully'
-        })
+        try:
+            classifier = EmailClassifier(args)
+            classifier.run()
+            
+            return jsonify({
+                'status': 'success',
+                'message': 'Email classification completed successfully'
+            })
+        except ValueError as e:
+            # Handle validation errors from EmailClassifier
+            return jsonify({
+                'status': 'error',
+                'message': str(e)
+            }), 400
 
     except Exception as e:
         logger.error(f"API Error: {str(e)}")
