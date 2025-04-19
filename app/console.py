@@ -1,17 +1,10 @@
 import argparse
 import logging
 from classifier import EmailClassifier
+from modules.logging import setup_logging
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler('classifier.log'),
-        logging.StreamHandler()
-    ]
-)
-logger = logging.getLogger(__name__)
+logger = setup_logging()
 
 def create_arg_parser():
     """Create and return the argument parser"""

@@ -1,11 +1,10 @@
-import os
 import json
-import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Any, Optional
+from modules.logging import setup_logging
 
-logger = logging.getLogger(__name__)
+logger = setup_logging()
 
 class OutputWriter:
     def __init__(self, output_dir='outputs'):
