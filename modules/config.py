@@ -107,6 +107,11 @@ class Config:
     def print_output(self) -> bool:
         """Get setting for printing output to console"""
         return self.settings.defaults.print_output
+    
+    @property
+    def save_steps(self) -> bool:
+        """Get setting for saving steps to file"""
+        return self.settings.defaults.save_steps
         
     def get_provider_models(self, provider: str) -> Dict[str, ModelConfig]:
         """Get dictionary of models available for a provider."""

@@ -40,6 +40,7 @@ def create_arg_parser():
     parser.add_argument(
         '--use-full-content',
         action='store_true',
+        default=None,
         help='Use full email content instead of just snippet for classification'
     )
 
@@ -57,6 +58,7 @@ def create_arg_parser():
     parser.add_argument(
         '--dry-run',
         action='store_true',
+        default=None,  
         help='Run without applying labels'
     )
 
@@ -64,11 +66,13 @@ def create_arg_parser():
     parser.add_argument(
         '--save-steps',
         action='store_true',
+        default=None,
         help='Save intermediate outputs'
     )
     parser.add_argument(
         '--print',
         action='store_true',
+        default=None,
         help='Print results to console'
     )
 

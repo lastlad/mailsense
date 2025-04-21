@@ -49,12 +49,16 @@ class EmailClassifier:
         """Set boolean flags from config if not explicitly set"""
         boolean_flags = {
             'dry_run': self.config.dry_run,
-            'use_full_content': self.config.use_full_content
+            'use_full_content': self.config.use_full_content,
+            'print': self.config.print_output,
+            'save_steps': self.config.save_steps
         }
         
         for flag, default in boolean_flags.items():
-            if not hasattr(args, flag):
+            # If the flag is None (not specified on command line) or doesn't exist
+            if not hasattr(args, flag) or getattr(args, flag) is None:
                 setattr(args, flag, default)
+                logger.debug(f"Using config default for '{flag}': {default}")
 
     def _validate_date_arguments(self, args):
         """Validate date-related arguments and set defaults based on priority:
@@ -155,7 +159,7 @@ class EmailClassifier:
 
             # Apply labels if not in dry run mode
             if self.args.dry_run:
-                logger.info("Dry run mode enabled. No labels will be applied.")
+                logger.info("**** DRY RUN **** - No changes will be applied.")
             else:
                 logger.info("Applying labels to emails...")
                 applied_count = 0
