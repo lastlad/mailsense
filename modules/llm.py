@@ -9,17 +9,46 @@ from botocore.config import Config
 
 from modules.model import EmailSummary
 from modules.prompts import summarize_template, classify_template, classify_template_no_labels
+from modules.logging import setup_logging
+
+logger = setup_logging()
 
 class LLMProcessor:
-    def __init__(self, provider: str, model_name: str):
-        """Initialize LLM processor with specific provider and model"""
+    def __init__(self, provider: str, model_config: dict):
+        """Initialize LLM processor with specific provider and model configuration."""
         
+        self.provider = provider
+        self.model_config = model_config
+        self.model_name = model_config.get('model_name', 'unknown')
+
+        # Extract common parameters, providing defaults
+        model_type = model_config.get('model_type', 'standard')
+        temperature = model_config.get('temperature', model_type == 'reasoning' and 1 or 0.1) # Default is 1 for reasoning models
+        top_p = model_config.get('top_p', 0.1)
+        max_tokens = model_config.get('max_tokens', 500)
+        reasoning_effort = model_config.get('reasoning_effort')
+
         # Initialize the appropriate LLM based on the provider
         if provider == "openai":
-            self.llm = ChatOpenAI(
-                temperature=0.1, 
-                model=model_name
-            )
+            openai_kwargs = {
+                'model_name': self.model_name,
+                'max_tokens': max_tokens,
+            }
+            
+            if model_type == 'reasoning':
+                logger.info(f"Using reasoning model type for {self.model_name}. Ignoring temperature/top_p.")
+                if reasoning_effort:
+                    logger.info(f"Reasoning effort specified: {reasoning_effort}")
+                    openai_kwargs['reasoning_effort'] = reasoning_effort
+                    openai_kwargs['temperature'] = temperature
+                    # Do NOT pass top_p for reasoning models
+            else:
+                logger.debug(f"Using standard model type for {self.model_name}. Applying temp={temperature}, top_p={top_p}.")
+                openai_kwargs['temperature'] = temperature
+                openai_kwargs['top_p'] = top_p
+
+            self.llm = ChatOpenAI(**openai_kwargs)
+
         elif provider == "bedrock":
             # Configure AWS Bedrock client
             config = Config(
@@ -37,18 +66,18 @@ class LLMProcessor:
             )
 
             self.llm = ChatBedrock(
-                model_id=model_name,
+                model_id=self.model_name,
                 client=bedrock_client,
                 model_kwargs={
-                    "temperature": 0.1,
-                    "max_tokens": 500,
-                    "top_p": 0.1
+                    "temperature": temperature,
+                    "max_tokens": max_tokens,
+                    "top_p": top_p
                 }
             )
         elif provider == "ollama":
             self.llm = ChatOllama(
-                model=model_name,
-                temperature=0.1
+                model=self.model_name,
+                temperature=temperature
             )
         else:
             raise ValueError(f"Unsupported LLM provider: {provider}")

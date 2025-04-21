@@ -1,11 +1,10 @@
-import os
 import json
-import logging
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Any, Optional
+from modules.logging import setup_logging
 
-logger = logging.getLogger(__name__)
+logger = setup_logging()
 
 class OutputWriter:
     def __init__(self, output_dir='outputs'):
@@ -27,11 +26,10 @@ class OutputWriter:
         for directory in self.dirs.values():
             directory.mkdir(parents=True, exist_ok=True)
 
-    def save_step_output(self, 
-                        data: Any, 
-                        step: str, 
-                        filename: Optional[str] = None,
-                        print_to_console: bool = False) -> str:
+    def save_step_output(self,
+                        data: Any,
+                        step: str,
+                        filename: Optional[str] = None) -> str:
         """
         Save output from a processing step
         
@@ -39,7 +37,6 @@ class OutputWriter:
             data: The data to save
             step: Processing step name ('emails', 'summaries', 'classifications')
             filename: Optional custom filename
-            print_to_console: Whether to print the output to console
             
         Returns:
             Path to the saved file
@@ -57,10 +54,6 @@ class OutputWriter:
             # Save as JSON
             with open(output_path, 'w', encoding='utf-8') as f:
                 json.dump(data, f, indent=2, ensure_ascii=False)
-
-            if print_to_console:
-                print(f"\n=== {step.upper()} OUTPUT ===")
-                print(json.dumps(data, indent=2, ensure_ascii=False))
 
             logger.info(f"Saved {step} output to {output_path}")
             return str(output_path)

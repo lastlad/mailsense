@@ -1,0 +1,76 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+# 🧠 Cursor Instructions: Python Console App for LLM-Powered Classification
+
+## 🧩 Project Overview
+
+This project is a **Python-based console application** that classifies user-provided content (e.g., text files, direct input) using **LLMs (e.g., OpenAI, Anthropic)**. The classification may include tags, categories, sentiment, intent, etc., based on the LLM's response.
+
+---
+
+## 📁 Directory Structure Rules
+
+- All core logic of the repo as well as the LLM-related logic should go under `modules/`
+- CLI input/output handling, entrypoint to the app should go in `app/`
+- Configuration (e.g., model names, keys) goes in `config/` or `.env`
+- All the output should be stored in a `outputs/` directory
+- Ignore the content under the `/development` directory always.
+---
+
+## 🧱 Code Rules
+
+### 1. Modularity
+- Separate CLI interface from LLM logic.
+- Use `class` or `dataclass` where appropriate to manage structured inputs/outputs.
+
+### 2. Naming Conventions
+- Use `snake_case` for variables and functions.
+- Prefix classification tasks with their domain: e.g., `classify_sentiment`, `classify_topic`.
+
+### 3. Logging
+- Use the `logging` module, not `print()` statements.
+- Console output (to user) should be clean; all debugging output goes to logs.
+
+### 4. LLM Usage
+- API calls should include:
+  - Retry logic
+  - Awareness of token limits
+  - Configurable `temperature`, `top_p`, and `max_tokens`
+
+<!-- ### 5. Input Handling
+- Support both interactive input (`input()`) and file-based input.
+- Validate and sanitize input before sending to LLM. -->
+
+### 6. Output Formatting
+- Standardize LLM responses into structured `dicts` or `dataclasses`.
+- Console output should be human-readable (consider `tabulate` or similar for tables).
+
+---
+
+## ⚙️ LLM Integration
+
+### Prompting
+- Use prompt templates stored in the `modules/prompts.py` file.
+- Keep prompts modular, version-controlled, and reusable across tasks.
+
+<!-- ### Caching
+- Use file or SQLite caching to store previous results.
+- Cache should map `input_hash → response`. -->
+
+---
+
+<!-- ## ✅ Testing
+
+- Use `pytest` for all unit tests.
+- Mock LLM calls using `unittest.mock` or fixtures. -->
+
+---
+
+## 🧪 Supported Tasks
+
+- Content classification (e.g., tech, finance, legal)
+
+---
