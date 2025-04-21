@@ -129,12 +129,7 @@ class GmailClient(EmailClient):
             filter_query += f" after:{date_filter}"
 
         # Include specific labels if provided
-        labels_to_include = ['UNREAD'] # Always include UNREAD
-        if hasattr(self.config, 'include_labels') and self.config.include_labels:
-            # Fetch actual label IDs for names if needed, or assume IDs are configured
-            # For now, assume configured labels are IDs or standard ones like CATEGORY_UPDATES
-            labels_to_include.extend(self.config.include_labels) 
-            labels_to_include = list(set(labels_to_include)) # Ensure uniqueness
+        labels_to_include = ['UNREAD', 'CATEGORY_UPDATES']
         
         logger.info(f"Filter Query used: {filter_query}")
         logger.info(f"Label IDs used for filtering: {labels_to_include}")

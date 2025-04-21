@@ -1,7 +1,6 @@
 import os
 import sys
 from dotenv import load_dotenv
-from datetime import datetime
 load_dotenv()
 
 # Add project root to Python path
@@ -13,6 +12,7 @@ from modules.llm import LLMProcessor
 from modules.output import OutputWriter
 from modules.config import Config
 from modules.logging import setup_logging
+from modules.presenter import ConsolePresenter
 
 # Configure logging
 logger = setup_logging()
@@ -25,6 +25,7 @@ class EmailClassifier:
         # Initialize services and processors
         self.gmail_client = GmailClient(config=self.config)
         self.output_writer = OutputWriter()
+        self.presenter = ConsolePresenter()
         
         # Initialize LLM processors
         self.summary_llm, self.classify_llm = self._setup_llm_processors()
@@ -140,6 +141,10 @@ class EmailClassifier:
                  
             classifications = self._classify_emails(email_info)
             
+            # Print summary table if requested using the presenter
+            if self.args.print:
+                self.presenter.display_classification_summary(email_info, classifications)
+
             # Apply labels if not in dry run mode
             if self.args.dry_run:
                 logger.info("Dry run mode enabled. No labels will be applied.")
@@ -179,9 +184,8 @@ class EmailClassifier:
 
         if self.args.save_steps:
             self.output_writer.save_step_output(
-                email_info, 
-                'fetched_emails', # More descriptive name
-                print_to_console=self.args.print
+                email_info,
+                'emails'
             )
 
         # Only summarize if using full content
@@ -191,9 +195,8 @@ class EmailClassifier:
             email_info = self.summary_llm.summarize_emails(self.args, email_info) 
             if self.args.save_steps:
                 self.output_writer.save_step_output(
-                    email_info, 
-                    'summaries',
-                    print_to_console=self.args.print
+                    email_info,
+                    'summaries'
                 )
         else:
             logger.info("Using email snippets directly for classification (no summarization).")
@@ -229,9 +232,8 @@ class EmailClassifier:
         
         # Always save final classifications
         self.output_writer.save_step_output(
-            classifications, 
-            'classifications', # Reverted from 'final_classifications'
-            print_to_console=self.args.print
+            classifications,
+            'classifications'
         )
         
         return classifications
