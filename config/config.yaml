@@ -3,24 +3,30 @@ defaults:
   max_emails: 2
   days_old: 2
   dry_run: true
+  save_steps: false
   use_full_content: false
+  print: true
   llm_provider: "openai"  # default provider
-  llm_model: "gpt-4o-mini"  # default model
+  llm_model: "gpt-4.1-mini"  # default model
 
 # LLM Models Configuration
 llm_providers:
   openai:
-    models: 
-      - "gpt-4o-mini"
-      - "gpt-4o"
+    models:
+      o4-mini:
+        model_type: reasoning # Optional: 'reasoning' or standard (default)
+        reasoning_effort: medium # Optional: 'low', 'medium', 'high' (if model_type=reasoning)
+        temperature: 1
+      gpt-4.1: {}
+      gpt-4.1-mini: {}
+      gpt-4o: {}
+      gpt-4o-mini: {}
   bedrock:
     models:
-      - "claude-sonnet-35"
-      - "claude-haiku-35"
+      anthropic.claude-v2: {}
   ollama:
     models:
-      - "llama-33-70B"
-      - "deepseek-r1:7b"
+      llama3: {}
 
 # Email Labels
 email_labels:

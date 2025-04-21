@@ -95,36 +95,44 @@ class EmailClassifier:
         """Initialize and validate LLM processors"""
         provider = self.config.default_provider
         
-        # Determine classify model (always needed)
+        # --- Setup Classify LLM ---
         classify_model_name = self.args.classify_model or self.config.default_model
         if not self.config.validate_model(provider, classify_model_name):
-            raise ValueError(f"Invalid classify model {classify_model_name} for provider {provider}")
+            raise ValueError(f"Invalid classify model '{classify_model_name}' for provider '{provider}'")
         
         logger.info(f"Using provider: {provider}")
-        logger.info(f"Classification model: {classify_model_name}")
+        logger.info(f"Retrieving configuration for classification model: {classify_model_name}")
+        classify_model_config = self.config.get_model_config(provider, classify_model_name)
+        if not classify_model_config: # Handle case where config might be empty (e.g., model not found)
+             raise ValueError(f"Could not retrieve configuration for classification model: {classify_model_name}")
+        classify_model_config['model_name'] = classify_model_name # Ensure model_name is in the dict
+
+        # Initialize classify LLM with its specific configuration
+        logger.info(f"Initializing LLMProcessor for classification...")
+        classify_llm = LLMProcessor(provider=provider, model_config=classify_model_config)
         
-        # Initialize classify LLM first
-        classify_llm = LLMProcessor(provider=provider, model_name=classify_model_name)
-        
-        # If not using full content, summary LLM is the same as classify LLM
+        # --- Setup Summary LLM (if needed) ---
         if not self.args.use_full_content:
-            logger.info("Not using full content, summarization step will be skipped (using snippets).")
-            return classify_llm, classify_llm
+            logger.info("Not using full content, summarization step will be skipped. Using classifier LLM instance.")
+            return classify_llm, classify_llm # Return same instance for both
         
-        # If using full content, determine and set up summary LLM
         summary_model_name = self.args.summary_model or self.config.default_model
         if not self.config.validate_model(provider, summary_model_name):
-             raise ValueError(f"Invalid summary model {summary_model_name} for provider {provider}")
+             raise ValueError(f"Invalid summary model '{summary_model_name}' for provider '{provider}'")
         
-        logger.info(f"Summary model: {summary_model_name}")
-
         # Initialize summary LLM
         if summary_model_name == classify_model_name:
-            logger.info("Using same LLM for classification and summarization.")
+            logger.info(f"Using same model '{summary_model_name}' for classification and summarization. Reusing LLM instance.")
             summary_llm = classify_llm
         else:
-            logger.info("Using separate LLM for summarization.")
-            summary_llm = LLMProcessor(provider=provider, model_name=summary_model_name)
+            logger.info(f"Retrieving configuration for summary model: {summary_model_name}")
+            summary_model_config = self.config.get_model_config(provider, summary_model_name)
+            if not summary_model_config:
+                 raise ValueError(f"Could not retrieve configuration for summary model: {summary_model_name}")
+            summary_model_config['model_name'] = summary_model_name # Ensure model_name is in the dict
+
+            logger.info(f"Initializing separate LLMProcessor for summarization ('{summary_model_name}')...")
+            summary_llm = LLMProcessor(provider=provider, model_config=summary_model_config)
             
         return summary_llm, classify_llm
 

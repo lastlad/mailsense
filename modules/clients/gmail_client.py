@@ -258,6 +258,7 @@ class GmailClient(EmailClient):
 
             if user_labels:
                 logger.info(f"Found {len(user_labels)} user-defined labels in Gmail.")
+                logger.debug(f"User labels: {user_labels}")
                 return user_labels
             
             # Fallback to config only if no user labels are found in Gmail
